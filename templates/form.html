@@ -3,9 +3,9 @@
 {% block content %}
 <div class="container">
   <h1 class="text-center mb-4">Selected Programs:</h1>
-  <ul>
+  <ul class="list-group mb-4">
     {% for program in programs %}
-      <li>{{ program.replace('-', ' ').title() }}</li>
+      <li class="list-group-item">{{ program.replace('-', ' ').title() }}</li>
     {% endfor %}
   </ul>
   <form action="/submit" method="post" enctype="multipart/form-data">
@@ -13,10 +13,25 @@
       <label for="ct-file" class="form-label">CT File</label>
       <input type="file" class="form-control" id="ct-file" name="ct-file" required>
     </div>
+
+    {% if 'tfofinder' in programs or 'rnaprobe' in programs %}
     <div class="mb-3">
       <label for="probe-length" class="form-label">Probe Length</label>
       <input type="number" class="form-control" id="probe-length" name="probe-length" required>
     </div>
+    {% endif %}
+
+    {% if 'rnaprobe' in programs %}
+    <div class="mb-3">
+      <label for="start-base" class="form-label">Start Base Number (optional)</label>
+      <input type="number" class="form-control" id="start-base" name="start-base" placeholder="Default: 1">
+    </div>
+    <div class="mb-3">
+      <label for="end-base" class="form-label">End Base Number (optional)</label>
+      <input type="number" class="form-control" id="end-base" name="end-base" placeholder="Default: end of sequence">
+    </div>
+    {% endif %}
+
     <input type="hidden" name="programs" value="{{ programs|join(',') }}">
     <button type="submit" class="btn btn-primary">Submit</button>
   </form>

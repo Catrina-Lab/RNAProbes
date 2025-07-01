@@ -1,41 +1,72 @@
 {% extends 'base.html' %}
 
 {% block content %}
+<style>
+  .program-card {
+    cursor: pointer;
+    border: 2px solid transparent;
+    transition: border-color 0.2s ease-in-out, box-shadow 0.2s ease-in-out;
+  }
+  .program-card.selected {
+    border-color: #0d6efd;
+    box-shadow: 0 0 10px rgba(13, 110, 253, 0.5);
+  }
+  .program-card .form-check-input {
+    position: absolute;
+    top: 10px;
+    right: 10px;
+  }
+</style>
+
 <div class="container">
   <h1 class="text-center mb-4">Welcome to the RNA Tool Suite</h1>
-  <form action="/form" method="post">
+  <p class="text-center text-muted">Select one or more programs to begin.</p>
+  <form action="/form" method="post" id="program-form">
     <div class="row">
       <div class="col-md-4">
-        <div class="card text-center">
+        <div class="card text-center program-card" data-program="sm-fish">
           <div class="card-body">
             <h5 class="card-title">SM-Fish</h5>
             <p class="card-text">Single-molecule fluorescence in situ hybridization (smFISH) probe design.</p>
-            <input type="checkbox" name="programs" value="sm-fish" class="form-check-input">
+            <input type="checkbox" name="programs" value="sm-fish" class="form-check-input d-none">
           </div>
         </div>
       </div>
       <div class="col-md-4">
-        <div class="card text-center">
+        <div class="card text-center program-card" data-program="tfofinder">
           <div class="card-body">
             <h5 class="card-title">TFOFinder</h5>
             <p class="card-text">Triplex-forming oligonucleotide (TFO) target sequence finder.</p>
-            <input type="checkbox" name="programs" value="tfofinder" class="form-check-input">
+            <input type="checkbox" name="programs" value="tfofinder" class="form-check-input d-none">
           </div>
         </div>
       </div>
       <div class="col-md-4">
-        <div class="card text-center">
+        <div class="card text-center program-card" data-program="rnaprobe">
           <div class="card-body">
             <h5 class="card-title">RNAProbe</h5>
             <p class="card-text">Design of probes for RNA visualization.</p>
-            <input type="checkbox" name="programs" value="rnaprobe" class="form-check-input">
+            <input type="checkbox" name="programs" value="rnaprobe" class="form-check-input d-none">
           </div>
         </div>
       </div>
     </div>
     <div class="text-center mt-4">
-        <button type="submit" class="btn btn-primary">Proceed</button>
+        <button type="submit" class="btn btn-primary btn-lg">Proceed</button>
     </div>
   </form>
 </div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    const cards = document.querySelectorAll('.program-card');
+    cards.forEach(card => {
+        card.addEventListener('click', function () {
+            const checkbox = this.querySelector('input[type="checkbox"]');
+            checkbox.checked = !checkbox.checked;
+            this.classList.toggle('selected', checkbox.checked);
+        });
+    });
+});
+</script>
 {% endblock %}
