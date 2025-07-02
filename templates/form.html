@@ -3,25 +3,29 @@
 {% block content %}
 <div class="container">
   <h1 class="text-center mb-4">Selected Programs:</h1>
-  <ul class="list-group mb-4">
+  <ul class="list-group list-group-horizontal mb-4">
     {% for program in programs %}
-      <li class="list-group-item">{{ program.replace('-', ' ').title() }}</li>
+      <li class="list-group-item flex-fill text-center">{{ program.replace('-', ' ').title() }}</li>
     {% endfor %}
   </ul>
-  <form action="/submit" method="post" enctype="multipart/form-data">
+  <form action="/send-request" method="post" enctype="multipart/form-data">
     <div class="mb-3">
       <label for="ct-file" class="form-label">CT File</label>
       <input type="file" class="form-control" id="ct-file" name="ct-file" required>
     </div>
 
-    {% if 'tfofinder' in programs or 'rnaprobe' in programs %}
+    {% if 'tfofinder' in programs %}
     <div class="mb-3">
-      <label for="probe-length" class="form-label">Probe Length</label>
-      <input type="number" class="form-control" id="probe-length" name="probe-length" required>
+      <label for="tfo-probe-length" class="form-label">TFO Probe Length</label>
+      <input type="number" class="form-control" id="tfo-probe-length" name="tfo-probe-length" min="4" max="30" required>
     </div>
     {% endif %}
 
-    {% if 'rnaprobe' in programs %}
+    {% if 'pinmol' in programs %}
+    <div class="mb-3">
+      <label for="pinmol-probe-length" class="form-label">PinMol Probe Length</label>
+      <input type="number" class="form-control" id="pinmol-probe-length" name="pinmol-probe-length" min="18" max="26" required>
+    </div>
     <div class="mb-3">
       <label for="start-base" class="form-label">Start Base Number (optional)</label>
       <input type="number" class="form-control" id="start-base" name="start-base" placeholder="Default: 1">

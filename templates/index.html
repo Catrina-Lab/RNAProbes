@@ -1,72 +1,114 @@
 {% extends 'base.html' %}
 
+{% block head_content %}
+  <style>
+    .program-card {
+      cursor: pointer;
+      border: 2px solid transparent;
+      transition: border-color 0.2s ease-in-out, box-shadow 0.2s ease-in-out;
+      height: 100%;
+    }
+    /* .program-card.selected */ .program-card:has(input[type="checkbox"]:checked) {
+      border-color: #0d6efd;
+      box-shadow: 0 0 10px rgba(13, 110, 253, 0.5);
+    }
+    .program-card .form-check-input {
+      position: absolute;
+      top: 10px;
+      right: 10px;
+    }
+    .warning-text {
+      color: #ea1212 !important;
+      font-weight: bold;
+    }
+  </style>
+{% endblock %}
+
 {% block content %}
-<style>
-  .program-card {
-    cursor: pointer;
-    border: 2px solid transparent;
-    transition: border-color 0.2s ease-in-out, box-shadow 0.2s ease-in-out;
-  }
-  .program-card.selected {
-    border-color: #0d6efd;
-    box-shadow: 0 0 10px rgba(13, 110, 253, 0.5);
-  }
-  .program-card .form-check-input {
-    position: absolute;
-    top: 10px;
-    right: 10px;
-  }
-</style>
+  <div class="container">
+    <h1 class="text-center mb-4">Welcome to the RNA Tool Suite</h1>
+    <p class="text-center text-muted" id="program-select-label">Select one or more programs to begin.</p>
+    <form action="/form" method="post" id="program-form">
+      <div class="row">
+        <div class="col-md-4">
+          <div class="card text-center program-card" data-program="sm-fish">
+            <div class="card-body">
+              <h5 class="card-title">SM-Fish</h5>
+              <p class="card-text">Single-molecule fluorescence in situ hybridization (smFISH) probe design, considering secondary strucutures.</p>
+              <input type="checkbox" name="programs" value="sm-fish" class="form-check-input d-none">
+            </div>
+          </div>
+        </div>
+        <div class="col-md-4">
+          <div class="card text-center program-card" data-program="tfofinder">
+            <div class="card-body">
+              <h5 class="card-title">TFOFinder</h5>
+              <p class="card-text">Triplex-forming oligonucleotide (TFO) target designer for RNA.</p>
+              <input type="checkbox" name="programs" value="tfofinder" class="form-check-input d-none">
+            </div>
+          </div>
+        </div>
+        <div class="col-md-4">
+          <div class="card text-center program-card" data-program="pinmol">
+            <div class="card-body">
+              <h5 class="card-title">PinMol</h5>
+              <p class="card-text">Molecular beacons designer for live cell imaging of mRNA targets.</p>
+              <input type="checkbox" name="programs" value="pinmol" class="form-check-input d-none">
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="text-center mt-4">
+          <button type="submit" class="btn btn-primary btn-lg">Proceed</button>
+      </div>
+    </form>
+  </div>
 
-<div class="container">
-  <h1 class="text-center mb-4">Welcome to the RNA Tool Suite</h1>
-  <p class="text-center text-muted">Select one or more programs to begin.</p>
-  <form action="/form" method="post" id="program-form">
-    <div class="row">
-      <div class="col-md-4">
-        <div class="card text-center program-card" data-program="sm-fish">
-          <div class="card-body">
-            <h5 class="card-title">SM-Fish</h5>
-            <p class="card-text">Single-molecule fluorescence in situ hybridization (smFISH) probe design.</p>
-            <input type="checkbox" name="programs" value="sm-fish" class="form-check-input d-none">
-          </div>
-        </div>
-      </div>
-      <div class="col-md-4">
-        <div class="card text-center program-card" data-program="tfofinder">
-          <div class="card-body">
-            <h5 class="card-title">TFOFinder</h5>
-            <p class="card-text">Triplex-forming oligonucleotide (TFO) target sequence finder.</p>
-            <input type="checkbox" name="programs" value="tfofinder" class="form-check-input d-none">
-          </div>
-        </div>
-      </div>
-      <div class="col-md-4">
-        <div class="card text-center program-card" data-program="rnaprobe">
-          <div class="card-body">
-            <h5 class="card-title">RNAProbe</h5>
-            <p class="card-text">Design of probes for RNA visualization.</p>
-            <input type="checkbox" name="programs" value="rnaprobe" class="form-check-input d-none">
-          </div>
-        </div>
-      </div>
-    </div>
-    <div class="text-center mt-4">
-        <button type="submit" class="btn btn-primary btn-lg">Proceed</button>
-    </div>
-  </form>
-</div>
+{% endblock %}
 
-<script>
-document.addEventListener('DOMContentLoaded', function () {
-    const cards = document.querySelectorAll('.program-card');
-    cards.forEach(card => {
-        card.addEventListener('click', function () {
-            const checkbox = this.querySelector('input[type="checkbox"]');
-            checkbox.checked = !checkbox.checked;
-            this.classList.toggle('selected', checkbox.checked);
-        });
+{% block scripts %}
+  <script id="functions">
+    function makeRed(id, remove = false){
+      if(remove) document.getElementById(id).classList.remove("warning-text");
+      else document.getElementById(id).classList.add("warning-text");
+    }
+    function clickCard(programCard){
+      const checkbox = programCard.querySelector('input[type="checkbox"]'); //click the invisible checkbox
+      checkbox.checked = !checkbox.checked;
+      if(checkbox.checked) makeRed('program-select-label', true); //make it not red
+      programCard.classList.toggle('selected', checkbox.checked);
+    }
+  </script>
+  <script>
+    const form = document.querySelector('#program-form');
+    //the following method is to deal with history. When the back button is pressed, this doesn't actually run after 1 second.
+    //It runs after the form is autofilled, so should be able to fix any sync issues with the checkboxes and the program-cards
+    document.addEventListener("readystatechange", e=>{
+      if(e.target.readyState == "complete"){
+        startTime = performance.now();
+        setTimeout(()=>{
+          console.log(performance.now() - startTime);
+          data = new FormData(form);
+          console.log(data, document.readyState)
+          data.getAll('programs').forEach(value=>{
+              console.log(value, document.querySelector(`.program-card input[value="${value}"]`));
+              document.querySelector(`.program-card input[value="${value}"]`).classList.add("selected");
+          });
+        }, 1000);
+      }
     });
-});
-</script>
+    form.addEventListener('click', e => {
+      let clickedElement;
+      if(clickedElement = e.target.closest(".program-card")){ //if you clicked a program-card (works with dynamic elements)
+        clickCard(clickedElement);
+      }
+    });
+    form.addEventListener('submit', e=>{
+      data = new FormData(form)
+      if(!data.get('programs')){
+        e.preventDefault();
+        makeRed('program-select-label');
+      }
+    });
+  </script>
 {% endblock %}
