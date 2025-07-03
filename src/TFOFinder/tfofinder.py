@@ -2,6 +2,7 @@ import os
 import sys
 import csv
 import fileinput
+import contextlib
 import pandas as pd
 from Bio.SeqUtils import MeltingTemp as mt
 from pathlib import Path
@@ -18,24 +19,6 @@ def readSScountFile(filein : str, outputDir = None):
     mb_userpath = outputDir or filein_path.parent  # Use the parent directory of the input file to save all files
     fname = filein_path.stem
     return (mb_userpath, fname)
-
-# def create_new_input_file(filein):
-#     mb_userpath, fname = readSScountFile(filein)
-#     new_input_file_path = mb_userpath / f"{fname}_new_input.txt"  # Properly join path and filename
-#
-#     try:
-#         if not Path(filein).exists():
-#             raise FileNotFoundError(f"The file {filein} does not exist.")
-#
-#         with open(filein, 'r') as firstfile, open(new_input_file_path, 'w') as ct_file:
-#             for line in firstfile:
-#                 ct_file.write(line)
-#     except FileNotFoundError as e:
-#         print(e)
-#     except PermissionError as e:
-#         print(f"PermissionError: {e}")
-#     except Exception as e:
-#         print(f"An error occurred: {e}")
 
 def seqTarget(f): #sequence of target & sscount for each probe as fraction (1 for fully single stranded)
     bl = [[],[],[]]
@@ -122,6 +105,41 @@ def get_command_line_arguments(args):
     return parser.parse_args(args)
 
 
+def createSSCountFile(filename : str) -> str:
+    #needed: _base_file, sscount
+    global mb_pick
+    
+    base_file = mb_userpath / f"{fname}_base_file.txt"
+    file_path = Path(base_file)
+
+    # convert the ct_file.txt into a comma seperated file. Maybe put in other section, or delete
+    for lines in fileinput.FileInput(base_file, inplace=1):
+        lines2 = ",".join(lines.split())
+        if lines == '' or any(x in lines for x in match): continue
+        print(lines2)
+
+    with contextlib.suppress(FileNotFoundError):
+        os.remove(file_path.with_suffix('.csv'))
+    file_path.rename(file_path.with_suffix('.csv'))
+
+    #read and save _base_file as csv, only including 3 columns
+    mb_pick = pd.read_csv(mb_userpath / f"{fname}_base_file.csv", sep=',', usecols=[0,1,4], 
+                          dtype={"baseno": int, "base": str, "bs_bind": int})
+    
+    
+    if(arguments and arguments.debug):  mb_pick.to_csv(mb_userpath / f"{fname}_three_col.csv", index=False)
+
+    df_grouped = mb_pick.groupby(['baseno', 'base'], as_index = False).agg(lambda x: x[x == 0].count())
+    df_grouped.rename(columns={'bs_bind': 'sscount'}, inplace=True)
+    df_grouped = df_grouped.reindex(columns=['baseno','sscount','base'])
+
+
+    df_grouped['base'] = df_grouped.base.replace('T', 'U')
+
+    df_grouped.to_csv(mb_userpath / f"{fname}_sscount.csv", index=False, header=False)
+
+    return mb_userpath / f"{fname}_sscount.csv"
+
 if __name__ == "__main__":
     arguments = get_command_line_arguments(sys.argv[1:])
     print(arguments)
@@ -148,83 +166,20 @@ if __name__ == "__main__":
     
     mb_so = 0
     #contert the ct file to a txt (but named ct_file for some reason)
-    with open(filein,'r') as firstfile, open(mb_userpath / f"{fname}_new_input.txt",'w') as ct_file:
+    with open(filein,'r') as firstfile, open(mb_userpath / f"{fname}_base_file.txt",'w') as base_file:
+        base_file.write("baseno,base,bs_bf,bs_aft,bs_bind,base2\n")
         for line in firstfile:
-            ct_file.write(line) #needed?
+            base_file.write(line) #needed?
             if any(x in line for x in match):
                 mb_so += 1
             
         print ('Number of Structures = '+str(mb_so) + ' \n...Please wait...')
 
-    ct_file = mb_userpath / f"{fname}_new_input.txt"
 
-
-    # convert the ct_file.txt into a comma seperated file
-    for lines in fileinput.FileInput(ct_file, inplace=1):
-        lines2 = ",".join(lines.split())
-        if lines == '': continue
-        print(lines2)
-
-    #convert the ct_file.txt into a comma seperated file, add on top "baseno","base","bs_bf", "bs_aft", "bs_bind", "base2" (names the columns)
-    with open(ct_file, 'r') as infile2, open(mb_userpath / f"{fname}_base_file.csv", 'w') as csv_file:
-        reader = csv.reader(infile2)
-        writer = csv.writer(csv_file, delimiter = ',', lineterminator = '\n')
-        writer.writerow(["baseno","base","bs_bf", "bs_aft", "bs_bind", "base2"])
-        for row in reader:
-            if not any(x in row for x in match):
-                writer.writerow(row)
-                csv_file.flush() # whenever you want
-
-    #read and save _base_file as csv, only including 3 columns
-    mb_pick = pd.read_csv(mb_userpath / f"{fname}_base_file.csv", sep=',', usecols=[0,1,4], dtype=object)
-    mb_pick.to_csv(mb_userpath / f"{fname}_three_col.csv", index=False)
-
-    #convert three_col.csv into an prelim-sscount file (with heading and empty lines).
-    with open (mb_userpath / f"{fname}_three_col.csv", 'r') as infile3, open(mb_userpath / f"{fname}_sscount1.csv", 'w') as outfile3:
-        columns = [[],[],[]]
-        reader = csv.reader(infile3)
-        for row in reader:
-           for col in range (3):
-               columns[col].append(row[col])
-           base_nol = columns[0]
-           basel = columns[1]
-           sscntl = columns[2]
-
-           sscntl = [(1 if x == '0' else 0) for x in sscntl]
-
-        writer = csv.writer(outfile3)
-        rows = zip(base_nol, sscntl, basel )
-        for row in rows:
-            writer.writerow(row)
-
-    df = pd.read_csv(mb_userpath / f"{fname}_sscount1.csv")
-
-    df_grouped = df.groupby(['baseno', 'base'], as_index = False).sum()
-
-    a = pd.DataFrame(df_grouped)
-    a.to_csv(mb_userpath / f"{fname}_base_grouped.csv", index=False)
-
-    #convert the grouped bases to an sscount file (id, single stranded count, base). Makes sure to replace T nuc with U
-    with open (mb_userpath / f"{fname}_base_grouped.csv", 'r') as infile4, open(mb_userpath / f"{fname}_sscount.csv", 'w') as outfile4:
-        columns = [[],[],[]]
-        reader = csv.reader(infile4)
-        next(infile4)
-        for row in reader:
-            if not any(x in row for x in match):
-                for col in range (3):
-                    columns[col].append(row[col])
-                    base_nol = columns[0]
-                    basel2 = columns[1]
-                    basel = [sub.replace('T', 'U') for sub in basel2]
-                    sscntl = columns[2]
-        writer = csv.writer(outfile4, delimiter = ',', lineterminator = '\n')
-        rows = zip(base_nol, sscntl, basel )
-        for row in rows:
-            writer.writerow(row)
-
+    sscount_file = createSSCountFile(fname)
 
     #sequence using the sscount file
-    with open(mb_userpath / f"{fname}_sscount.csv", 'r') as f:
+    with open(sscount_file, 'r') as f:
         mb_sscount, mb_position, mb_max_base, mb_bases, mb_seq, mb_size = seqTarget(f)
 
     mb_jl, mb_perl, mb_sumsl, mb_basesl, mb_Tml = seqProbes(mb_seq, mb_size, mb_sscount, probe)
