@@ -125,9 +125,7 @@ def createSSCountFile(filename : str) -> str:
     #read and save _base_file as csv, only including 3 columns
     mb_pick = pd.read_csv(mb_userpath / f"{fname}_base_file.csv", sep=',', usecols=[0,1,4], 
                           dtype={"baseno": int, "base": str, "bs_bind": int})
-    
-    
-    if(arguments and arguments.debug):  mb_pick.to_csv(mb_userpath / f"{fname}_three_col.csv", index=False)
+
 
     df_grouped = mb_pick.groupby(['baseno', 'base'], as_index = False).agg(lambda x: x[x == 0].count())
     df_grouped.rename(columns={'bs_bind': 'sscount'}, inplace=True)
@@ -183,75 +181,25 @@ if __name__ == "__main__":
         mb_sscount, mb_position, mb_max_base, mb_bases, mb_seq, mb_size = seqTarget(f)
 
     mb_jl, mb_perl, mb_sumsl, mb_basesl, mb_Tml = seqProbes(mb_seq, mb_size, mb_sscount, probe)
-
-    #write the result to file (zipped). Todo: why called sscount??
-    with open(mb_userpath / f"{fname}_all_probes.csv", 'w') as csv_file:
-        writer = csv.writer(csv_file, lineterminator='\n')
-        writer.writerow(["Base number", "%GC", "sscount", "Parallel TFO Probe sequence", "Tm"])
-        rows = zip(mb_jl,mb_perl,mb_sumsl,mb_basesl,mb_Tml)
-        for row in rows:
-            writer.writerow(row)
     
-    #read the ct file again (csv with column headers)
-    mb_pick2 = pd.read_csv(mb_userpath / f"{fname}_base_file.csv", sep=',', usecols=[0,1,4])
-    
-    #copy the base file, but only include rows whose base binds to something and is A or G
-    #mb_pick3 = mb_pick.loc[(mb_pick2['bs_bind'] > 0) and ((mb_pick2['base'] == "A") or (mb_pick2['base'] == "G"))]
-    mb_pick3 = mb_pick.loc[(mb_pick2['bs_bind']>0) & (mb_pick2['base'] == "G") | (mb_pick2['base'] == "A") &
-                               (mb_pick2['bs_bind']>0)]
-    mb_pick3.to_csv(mb_userpath / f"{fname}_three_col2.csv")
+    sscount_df = pd.read_csv(mb_userpath / f"{fname}_sscount.csv", header=None, names=["baseno", "sscount", "base"]) #temp
 
-    #add a test3 file which counts how many times the A or G are double stranded (in desc order) (baseno, count)
-    #also removes single stranded ones
-    count_ds_R = mb_pick3['baseno'].value_counts()
-    dff1 = count_ds_R.to_csv(mb_userpath / f"{fname}_test3.csv", sep=',')
+    #get the double stranded elements with bse A or G
+    dscount = sscount_df.loc[(sscount_df.base.isin(["A", "G"]) & (sscount_df.sscount != 20))]
+    dscount = dscount.drop('sscount', axis=1)
 
-    #add a count_Rs_so file which counts how many times the A or G are double stranded (ordered by baseno).
-    count_ds_R2 = pd.DataFrame({'baseno':count_ds_R.index, 'count':count_ds_R.values}).sort_values(by=['baseno'])
-    df = count_ds_R2.to_csv(mb_userpath / f"{fname}_count_Rs_so.csv", index = False)
-    df1 = pd.read_csv(mb_userpath / f"{fname}_count_Rs_so.csv")
-   
-
-   #find the rows whose base number appears directly after the base number before it (n-1)
-    df1['index_diff'] = df1['baseno'].diff()
-    consec_pick = df1.loc[(df1['index_diff'] == 1)] #filter by consecutive rows (note: will not include first consecutive)
-
-    #get all elements which appear after it's previous element
-    consec_pick.to_csv(mb_userpath / f"{fname}_all_consecutives.csv", index = False)
-    consec_pick1 = pd.read_csv(mb_userpath / f"{fname}_all_consecutives.csv")
-
-    pick = probe-2
-    consec_pick1['index_consec'] = consec_pick1['baseno'].diff(periods=pick)
-    consec_pick1.to_csv(mb_userpath / f"{fname}_all_consec_{str(probe)}.csv", index = False)   # Include user input value in the filename
-    consec_pick2 = consec_pick1.loc[consec_pick1['index_consec']==pick]
-    consec_pick2.to_csv(mb_userpath / f"{fname}_final_{str(probe)}_consec.txt", index = False)
-
-    #final consec picks probe consecutive elements that are A or G and are double stranded
-    #final consec picks the last id of the nucleotide that is the last nucleotide in a string of As or Gs that are all
-    #double stranded at least once
+    #get the first element of a 9 length probe
+    consec = dscount.loc[dscount.baseno.diff(-1) == -1] #and the one after
+    consec = consec.loc[consec.baseno.diff(-(probe - 2)) == -(probe - 2)]
 
     #issue: what if they're not ever double-stranded in the same structure??
 
-    with open(mb_userpath / f"{fname}_all_probes.csv") as f, open(mb_userpath / f"{fname}_final_{str(probe)}_consec.txt", 'r') as f1, open(mb_userpath / f"{fname}_TFO_probes.txt", 'a') as f2:
-        next(f)
-        next(f1)
-        reader = csv.reader(f1, delimiter=",")        
-        reader2 = csv.reader(f, delimiter=",")
-        writer = csv.writer(f2, lineterminator = '\n')
+    with open(mb_userpath / f"{fname}_TFO_probes.txt", 'a') as f2:
+        writer = csv.writer(f2, lineterminator = '\n') #no need to use csv.writer, but will ask ig
         writer.writerow(['Results for '+filein + ' using ' + str(probe) + ' as parallel TFO probe length'])
         writer.writerow(['Start Position', '%GA', 'sscount', 'Parallel TFO Probe Sequence', 'Tm'])        
-        for line in reader:
-            y = int(line[0])-probe+1
-            for row in reader2:
-                if int(row[0])==y:
-                    break
-            writer.writerow(row)
+        for discard, line in consec.iterrows():
+            index = line.baseno - 1
+            writer.writerow([mb_jl[index],mb_perl[index],mb_sumsl[index],mb_basesl[index],mb_Tml[index]])
 
-    os.remove(mb_userpath / f"t{fname}_base_file.csv")
-    os.remove(mb_userpath / f"t{fname}_count_Rs_so.csv")
-    os.remove(mb_userpath / f"t{fname}_all_consecutives.csv")
-    os.remove(mb_userpath / f"t{fname}_three_col2.csv")
-    os.remove(mb_userpath / f"t{fname}_all_probes.csv")
-    os.remove(mb_userpath / f"t{fname}_all_consec_{str(probe)}.csv")
-    os.remove(mb_userpath / f"t{fname}_final_{str(probe)}_consec.txt")
-    os.remove(mb_userpath / f"t{fname}_test3.csv")
+    os.remove(mb_userpath / f"{fname}_base_file.csv")
