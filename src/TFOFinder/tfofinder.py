@@ -165,7 +165,7 @@ if __name__ == "__main__":
                                fail_message = f'You must type a number between {probeMin} and {probeMax}, try again: ')
     
     mb_so = 0
-    #contert the ct file to a txt (but named ct_file for some reason)
+    #convert the ct file to a txt
     with open(filein,'r') as firstfile, open(mb_userpath / f"{fname}_base_file.txt",'w') as base_file:
         base_file.write("baseno,base,bs_bf,bs_aft,bs_bind,base2\n")
         for line in firstfile:
@@ -195,27 +195,28 @@ if __name__ == "__main__":
     #read the ct file again (csv with column headers)
     mb_pick2 = pd.read_csv(mb_userpath / f"{fname}_base_file.csv", sep=',', usecols=[0,1,4])
     
-    #copy the base file, but only include rows whose base binds to somethings and is A or G
+    #copy the base file, but only include rows whose base binds to something and is A or G
     #mb_pick3 = mb_pick.loc[(mb_pick2['bs_bind'] > 0) and ((mb_pick2['base'] == "A") or (mb_pick2['base'] == "G"))]
     mb_pick3 = mb_pick.loc[(mb_pick2['bs_bind']>0) & (mb_pick2['base'] == "G") | (mb_pick2['base'] == "A") &
                                (mb_pick2['bs_bind']>0)]
     mb_pick3.to_csv(mb_userpath / f"{fname}_three_col2.csv")
 
-    #add a test3 file which counts how many times the A or G are double stranded (in desc order)
+    #add a test3 file which counts how many times the A or G are double stranded (in desc order) (baseno, count)
+    #also removes single stranded ones
     count_ds_R = mb_pick3['baseno'].value_counts()
     dff1 = count_ds_R.to_csv(mb_userpath / f"{fname}_test3.csv", sep=',')
-    dff2 = pd.read_csv(mb_userpath / f"{fname}_test3.csv", sep = ',')
 
-    #add a count_Rs_so file which counts how many times the A or G are double stranded (ordered by ID)
-    count_ds_R2 = dff2.sort_values(by=['baseno'])
+    #add a count_Rs_so file which counts how many times the A or G are double stranded (ordered by baseno).
+    count_ds_R2 = pd.DataFrame({'baseno':count_ds_R.index, 'count':count_ds_R.values}).sort_values(by=['baseno'])
     df = count_ds_R2.to_csv(mb_userpath / f"{fname}_count_Rs_so.csv", index = False)
     df1 = pd.read_csv(mb_userpath / f"{fname}_count_Rs_so.csv")
    
 
-   #todo: comment rest
+   #find the rows whose base number appears directly after the base number before it (n-1)
     df1['index_diff'] = df1['baseno'].diff()
-    consec_pick = df1.loc[(df1['index_diff'] == 1)]
+    consec_pick = df1.loc[(df1['index_diff'] == 1)] #filter by consecutive rows (note: will not include first consecutive)
 
+    #get all elements which appear after it's previous element
     consec_pick.to_csv(mb_userpath / f"{fname}_all_consecutives.csv", index = False)
     consec_pick1 = pd.read_csv(mb_userpath / f"{fname}_all_consecutives.csv")
 
@@ -224,6 +225,12 @@ if __name__ == "__main__":
     consec_pick1.to_csv(mb_userpath / f"{fname}_all_consec_{str(probe)}.csv", index = False)   # Include user input value in the filename
     consec_pick2 = consec_pick1.loc[consec_pick1['index_consec']==pick]
     consec_pick2.to_csv(mb_userpath / f"{fname}_final_{str(probe)}_consec.txt", index = False)
+
+    #final consec picks probe consecutive elements that are A or G and are double stranded
+    #final consec picks the last id of the nucleotide that is the last nucleotide in a string of As or Gs that are all
+    #double stranded at least once
+
+    #issue: what if they're not ever double-stranded in the same structure??
 
     with open(mb_userpath / f"{fname}_all_probes.csv") as f, open(mb_userpath / f"{fname}_final_{str(probe)}_consec.txt", 'r') as f1, open(mb_userpath / f"{fname}_TFO_probes.txt", 'a') as f2:
         next(f)
@@ -240,18 +247,11 @@ if __name__ == "__main__":
                     break
             writer.writerow(row)
 
-    # os.remove(mb_userpath / f"{fname}_new_input.txt")
-    # os.remove(mb_userpath / f"{fname}_base_file.csv")
-    # os.remove(mb_userpath / f"{fname}_three_col.csv")
-    # os.remove(mb_userpath / f"{fname}_count_Rs_so.csv")
-    # os.remove(mb_userpath / f"{fname}_all_consecutives.csv")
-    # os.remove(mb_userpath / f"{fname}_three_col2.csv")
-    # os.remove(mb_userpath / f"{fname}_all_probes.csv")
-    # os.remove(mb_userpath / f"{fname}_all_consec_{str(probe)}.csv")
-    # os.remove(mb_userpath / f"{fname}_final_{str(probe)}_consec.txt")
-    # os.remove(mb_userpath / f"{fname}_base_grouped.csv")
-    # os.remove(mb_userpath / f"{fname}_sscount1.csv")
-    # os.remove(mb_userpath / f"{fname}_test3.csv")
-
-    #final:
-    #all_consec_6, final_6_consec, sscount, TFO_probes
+    os.remove(mb_userpath / f"t{fname}_base_file.csv")
+    os.remove(mb_userpath / f"t{fname}_count_Rs_so.csv")
+    os.remove(mb_userpath / f"t{fname}_all_consecutives.csv")
+    os.remove(mb_userpath / f"t{fname}_three_col2.csv")
+    os.remove(mb_userpath / f"t{fname}_all_probes.csv")
+    os.remove(mb_userpath / f"t{fname}_all_consec_{str(probe)}.csv")
+    os.remove(mb_userpath / f"t{fname}_final_{str(probe)}_consec.txt")
+    os.remove(mb_userpath / f"t{fname}_test3.csv")
