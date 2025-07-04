@@ -71,7 +71,7 @@ if __name__ == "__main__":
     df2.to_csv(mb_userpath / f"{fname}3.csv", sep = ',', index = None)
 
     # Load data from the CSV file
-    df = pd.read_csv(mb_userpath / f"{fname}3.csv")  # Replace 'your_file.csv' with your actual file path
+    df = pd.read_csv(mb_userpath / f"{fname}3.csv")
 
     chunks = []
     current_chunk = []

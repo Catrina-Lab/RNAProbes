@@ -11,7 +11,7 @@
   <form action="/send-request" method="post" enctype="multipart/form-data">
     <div class="mb-3">
       <label for="ct-file" class="form-label">CT File</label>
-      <input type="file" class="form-control" id="ct-file" name="ct-file" required>
+      <input type="file" class="form-control" id="ct-file" name="ct-file" accept=".ct" required>
     </div>
 
     {% if 'tfofinder' in programs %}

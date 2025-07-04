@@ -1,79 +1,77 @@
-import os
 import sys
-import csv
-import fileinput
-import contextlib
+
 import pandas as pd
 from Bio.SeqUtils import MeltingTemp as mt
 from pathlib import Path
-from Bio.Seq import Seq
+from Bio.Seq import Seq #don't think this is used even in the original
+from pandas import DataFrame
 
 sys.path.append(str(Path(__file__).parent.parent))
 from util import input_int_in_range
 
 probeMin = 4
 probeMax = 30
+match = ["ENERGY", "dG"] #find header rows in ct file
 
-def readSScountFile(filein : str, outputDir = None):
+def validate_arguments(probe_length: int, file=None) -> bool:
+    return type(probe_length) is int and (probeMin <= probe_length <= probeMax)
+
+def calculate_result(probe_length: int, filein=None, filename=None, arguments = None):
+
+    ct_df, structure_count = convert_ct_to_dataframe(filein)
+    #todo: ask if can get rid of this and place before
+    if arguments: print('Number of Structures = ' + str(structure_count) + ' \n...Please wait...')
+
+    sscount_df = getSSCountDF(ct_df, arguments and arguments.emit_sscount)
+    consec = get_consecutive_not_ss(probe_length, sscount_df)
+    #todo: issue: what if they're not ever double-stranded in the same structure??
+
+    return get_final_string(filename, probe_length, structure_count, consec, sscount_df)
+
+def parseCTFilePath(filein : str, outputDir = None):
     filein_path = Path(filein).resolve()  # Convert the filein to a Path object and resolve its full path
     mb_userpath = outputDir or filein_path.parent  # Use the parent directory of the input file to save all files
     fname = filein_path.stem
     return (mb_userpath, fname)
 
-def seqTarget(f): #sequence of target & sscount for each probe as fraction (1 for fully single stranded)
-    bl = [[],[],[]]
-    reader = csv.reader(f)
-    for row in reader:
-        for col in range(3):
-            bl[col].append(row[col])
-    sscount = bl[1]
-    position = bl[0]
-    max_base = bl[0][-1]
-    bases = bl[2]
-    seq = ''.join(bases)
-    size = len(seq)
-    return(sscount, position, max_base, bases, seq, size)
+# def seqTarget(df: DataFrame): #sequence of target & sscount for each probe as fraction (1 for fully single stranded)
+#     max_base = df.base.iat[-1]
+#     seq = ''.join(df.base)
+#     size = len(df)
+#     return df.sscount, df.baseno, max_base, df.base, seq, size
 
-def itersplit_into_x_chunks(argum, size, chunksize): #split sequence in chunks of probe size
-    for pos in range(0, size-chunksize+1):
-        yield argum[pos:pos+chunksize]
 
 basecomplement = str.maketrans({'A': 'U', 'C': 'G', 'G': 'C', 'U': 'A'})
-def parallel_complement(seq, complement = basecomplement): #generate RNA complement
+def parallel_complement(seq : str, complement = basecomplement): #generate RNA complement
     return seq.translate(complement)[::1]
 
-def seqProbes(mb_seq, mb_size, mb_sscount, probe):
-    result = list(itersplit_into_x_chunks(mb_seq, mb_size, probe))
-    basesl = []
-    for i in result:
-        i = parallel_complement(i)
-        basesl.append(i)
+def sequence_probe(baseno: int, probe_len: int, structure_count: int, sscount_df: DataFrame):
+    """
+    Sequence one specific probe
+    :param baseno: an integer representing the start of the probe, 1-indexed
+    :param probe_len: the length of the probe
+    :param sscount_df: the sscount dataframe
+    :return:
+    """
+    probe = "".join(sscount_df.base[baseno-1:baseno+probe_len - 1])
+    complement = parallel_complement(probe)
 
-    Tml = []
-    for i in basesl:
-        Tmx = mt.Tm_NN(i, dnac1 = 50000, dnac2 = 50000, Na = 100, nn_table = mt.RNA_NN1, saltcorr = 1)
-        Tml.append(int(Tmx))
-    result_bases = list(itersplit_into_x_chunks(mb_bases, mb_size, probe)) #list of lists of each base for each probe
-    #base number as j and list of these numbers as jl, list of percent of Gs and As as perl
-    j = 0
-    perl = []
-    jl = []
-    for i in result_bases:
-        j += 1
-        nas = i.count('A')
-        gs = i.count('G')
-        per = int((nas+gs)/probe*100)
-        perl.append(per)
-        jl.append(j)
-    size2=len(mb_sscount)
-    result2 = list(itersplit_into_x_chunks(mb_sscount, size2, probe))
-    sumsl = []
-    for i in result2:
-        i = list(map(int, i))
-        sums = sum(i)/(probe*mb_so)
-        sumsl.append(sums)
-    return (jl, perl, sumsl, basesl, Tml) #put together all data as indicated in header
+    tml = int(mt.Tm_NN(complement, dnac1=50000, dnac2=50000, Na=100, nn_table=mt.RNA_NN1, saltcorr=1))
 
+    per = int((probe.count('A') + probe.count('G')) / probe_len * 100)
+
+    probe_sscounts = sscount_df.sscount[baseno - 1:baseno + probe_len - 1]
+    avg_sscount = probe_sscounts.sum() / (probe_len * structure_count)
+    return (baseno, per, avg_sscount, complement, tml) #returns baseno so it can easily be written to file
+
+def get_consecutive_not_ss(probe_length: int, sscount_df : DataFrame) -> DataFrame:
+    # get the double stranded elements with bse A or G
+    dscount = sscount_df.loc[(sscount_df.base.isin(["A", "G"]) & (sscount_df.sscount != 20))]
+    dscount = dscount.drop('sscount', axis=1)
+
+    # get the first element of a 9 length probe
+    consec = dscount.loc[dscount.baseno.diff(-1) == -1]  # and the one after
+    return consec.loc[consec.baseno.diff(-(probe_length - 2)) == -(probe_length - 2)]
 
 def get_command_line_arguments(args):
     import argparse, pathlib, functools;
@@ -98,46 +96,54 @@ def get_command_line_arguments(args):
     parser.add_argument("-o", "--output-dir", type=functools.partial(path_string, suffix=""))
     parser.add_argument("-p", "--probes", type=range_type,  metavar=f"[{probeMin}-{probeMax + 1}]", 
                    help=f'The length of TFO probes, {probeMin}-{probeMax} inclusive')
-    parser.add_argument("-d", "--debug", action="store_true")
+    parser.add_argument("-s", "--emit-sscount", action="store_true")
     parser.add_argument("-v", "--verbose", action="store_true")
     parser.add_argument("-q", "--quiet", action="store_true")
 
     return parser.parse_args(args)
 
 
-def createSSCountFile(filename : str) -> str:
-    #needed: _base_file, sscount
-    global mb_pick
-    
-    base_file = mb_userpath / f"{fname}_base_file.txt"
-    file_path = Path(base_file)
+def convert_ct_to_dataframe(file):
+    """
+        Convert the ct file to a dataframe. This also gives the number of structures in the ct file.
+        This method should be inside of a with expression.
+        :param filename: the file to read and convert into a dataframe.
+        :return: (Dataframe, int structure_count)
+        """
 
-    # convert the ct_file.txt into a comma seperated file. Maybe put in other section, or delete
-    for lines in fileinput.FileInput(base_file, inplace=1):
-        lines2 = ",".join(lines.split())
-        if lines == '' or any(x in lines for x in match): continue
-        print(lines2)
-
-    with contextlib.suppress(FileNotFoundError):
-        os.remove(file_path.with_suffix('.csv'))
-    file_path.rename(file_path.with_suffix('.csv'))
-
-    #read and save _base_file as csv, only including 3 columns
-    mb_pick = pd.read_csv(mb_userpath / f"{fname}_base_file.csv", sep=',', usecols=[0,1,4], 
-                          dtype={"baseno": int, "base": str, "bs_bind": int})
+    # dtype={"baseno": int, "base": str, "bs_bind": int}
+    ct_df =  pd.read_csv(file, sep=' +', usecols=[0,1,4], names=["baseno", "base", "bs_bind"], engine='python')
+    initial_row_count = len(ct_df)
+    ct_df = ct_df[~ct_df["base"].isin(match)]
+    structure_count = initial_row_count - len(ct_df)
+    ct_df = ct_df.astype({"baseno": int, "base": str, "bs_bind": int})
+    return (ct_df, structure_count)
 
 
-    df_grouped = mb_pick.groupby(['baseno', 'base'], as_index = False).agg(lambda x: x[x == 0].count())
+def getSSCountDF(ct_dataframe : DataFrame, save_to_file: bool = False) -> DataFrame:
+    """
+    Get the SSCount from a dataframe
+    :param ct_dataframe: ct converted to a dataframe
+    :return: Dataframe
+    """
+
+    df_grouped = ct_dataframe.groupby(['baseno', 'base'], as_index = False).agg(lambda x: x[x == 0].count())
     df_grouped.rename(columns={'bs_bind': 'sscount'}, inplace=True)
     df_grouped = df_grouped.reindex(columns=['baseno','sscount','base'])
 
 
     df_grouped['base'] = df_grouped.base.replace('T', 'U')
 
-    df_grouped.to_csv(mb_userpath / f"{fname}_sscount.csv", index=False, header=False)
+    if save_to_file: df_grouped.to_csv(mb_userpath / f"{fname}_sscount.csv", index=False, header=False)
 
-    return mb_userpath / f"{fname}_sscount.csv"
+    return df_grouped
 
+def get_final_string(file_name : str, probe_length, structure_count, consec, sscount_df):
+    to_return = 'Results for ' + file_name + ' using ' + str(probe_length) + ' as parallel TFO probe length\n' + \
+                'Start Position,%GA,sscount,Parallel TFO Probe Sequence,Tm\n'
+    get_probe_result = lambda x: ",".join(map(str, sequence_probe(x, probe_length, structure_count, sscount_df)))
+    to_return += "\n".join(map(get_probe_result, consec.baseno))
+    return to_return
 if __name__ == "__main__":
     arguments = get_command_line_arguments(sys.argv[1:])
     print(arguments)
@@ -155,51 +161,16 @@ if __name__ == "__main__":
           f"{"->" * 40}")
     
     filein = arguments.file or input('Enter the ct file path and name: ')
-    mb_userpath, fname = readSScountFile(filein, arguments.output_dir)
+    mb_userpath, fname = parseCTFilePath(filein, arguments.output_dir)
 
-    match = ["ENERGY", "dG"] #find header rows in ct file
-
-    probe = arguments.probes or input_int_in_range(min = probeMin, max = probeMax + 1, msg = f"Enter the length of TFO probe; a number between {probeMin} and {probeMax} inclusive: ", 
+    probe_length = arguments.probes or input_int_in_range(min = probeMin, max = probeMax + 1, msg = f"Enter the length of TFO probe; a number between {probeMin} and {probeMax} inclusive: ",
                                fail_message = f'You must type a number between {probeMin} and {probeMax}, try again: ')
     
-    mb_so = 0
     #convert the ct file to a txt
-    with open(filein,'r') as firstfile, open(mb_userpath / f"{fname}_base_file.txt",'w') as base_file:
-        base_file.write("baseno,base,bs_bf,bs_aft,bs_bind,base2\n")
-        for line in firstfile:
-            base_file.write(line) #needed?
-            if any(x in line for x in match):
-                mb_so += 1
-            
-        print ('Number of Structures = '+str(mb_so) + ' \n...Please wait...')
+    with open(filein,'r') as file:
+        tfo_probes_result = calculate_result(probe_length, file, filename = filein, arguments = arguments)
 
-
-    sscount_file = createSSCountFile(fname)
-
-    #sequence using the sscount file
-    with open(sscount_file, 'r') as f:
-        mb_sscount, mb_position, mb_max_base, mb_bases, mb_seq, mb_size = seqTarget(f)
-
-    mb_jl, mb_perl, mb_sumsl, mb_basesl, mb_Tml = seqProbes(mb_seq, mb_size, mb_sscount, probe)
-    
-    sscount_df = pd.read_csv(mb_userpath / f"{fname}_sscount.csv", header=None, names=["baseno", "sscount", "base"]) #temp
-
-    #get the double stranded elements with bse A or G
-    dscount = sscount_df.loc[(sscount_df.base.isin(["A", "G"]) & (sscount_df.sscount != 20))]
-    dscount = dscount.drop('sscount', axis=1)
-
-    #get the first element of a 9 length probe
-    consec = dscount.loc[dscount.baseno.diff(-1) == -1] #and the one after
-    consec = consec.loc[consec.baseno.diff(-(probe - 2)) == -(probe - 2)]
-
-    #issue: what if they're not ever double-stranded in the same structure??
-
-    with open(mb_userpath / f"{fname}_TFO_probes.txt", 'a') as f2:
-        writer = csv.writer(f2, lineterminator = '\n') #no need to use csv.writer, but will ask ig
-        writer.writerow(['Results for '+filein + ' using ' + str(probe) + ' as parallel TFO probe length'])
-        writer.writerow(['Start Position', '%GA', 'sscount', 'Parallel TFO Probe Sequence', 'Tm'])        
-        for discard, line in consec.iterrows():
-            index = line.baseno - 1
-            writer.writerow([mb_jl[index],mb_perl[index],mb_sumsl[index],mb_basesl[index],mb_Tml[index]])
-
-    os.remove(mb_userpath / f"{fname}_base_file.csv")
+    #todo: should it be add???
+    #todo: add as row if file already exists
+    with open(mb_userpath / f"{fname}_TFO_probes.txt", 'a') as file:
+        file.write(tfo_probes_result)
