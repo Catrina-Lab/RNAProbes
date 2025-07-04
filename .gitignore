@@ -1,3 +1,6 @@
 .aiexclude
 Temp_files/
 .idea/
+profile.html
+profile.json
+__pycache__/*
