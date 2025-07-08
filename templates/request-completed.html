@@ -1,0 +1,14 @@
+{% block content %}
+<div class="container flex-grow" id="{{program.lower()}}-container">
+  <div class="alert alert-success" role="alert">
+    <h4 class="alert-heading">Request Completed for {{program}}!</h4>
+    <div class="d-flex align-items-center">
+      <p class="m-0">Your results for {{program}} are now ready!</p>
+      <button id="{{program}}-download-btn" class="btn btn-success result-button flex-item-right" type="button">Download Results
+        <a id="{{program}}-download-anchor" class="d-none" download="{{filename}}" target="_blank"></a>
+      </button>
+      <button class="btn btn-success result-button" type="button">View Results</button>
+    </div>
+  </div>
+</div>
+{% endblock %}

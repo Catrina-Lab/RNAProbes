@@ -1,11 +1,9 @@
-{% extends 'base.html' %}
-
 {% block content %}
 <div class="container">
   <h1 class="text-center mb-4">Selected Programs:</h1>
   <ul class="list-group list-group-horizontal mb-4">
     {% for program in programs %}
-      <li class="list-group-item flex-fill text-center">{{ program.replace('-', ' ').title() }}</li>
+      <li class="list-group-item flex-fill text-center">{{ program }}</li>
     {% endfor %}
   </ul>
   <form action="/send-request" method="post" enctype="multipart/form-data">
@@ -14,25 +12,25 @@
       <input type="file" class="form-control" id="ct-file" name="ct-file" accept=".ct" required>
     </div>
 
-    {% if 'tfofinder' in programs %}
+    {% if 'TFOFinder' in programs %}
     <div class="mb-3">
       <label for="tfo-probe-length" class="form-label">TFO Probe Length</label>
-      <input type="number" class="form-control" id="tfo-probe-length" name="tfo-probe-length" min="4" max="30" required>
+      <input type="number" class="form-control" id="tfofinder-probe-length" name="tfofinder-probe-length" min="4" max="30" placeholder="Choose a number between 4 and 30" required>
     </div>
     {% endif %}
 
-    {% if 'pinmol' in programs %}
+    {% if 'PinMol' in programs %}
     <div class="mb-3">
       <label for="pinmol-probe-length" class="form-label">PinMol Probe Length</label>
-      <input type="number" class="form-control" id="pinmol-probe-length" name="pinmol-probe-length" min="18" max="26" required>
+      <input type="number" class="form-control" id="pinmol-probe-length" name="pinmol-probe-length" min="18" max="26" placeholder="Choose a number between 18 and 26" required>
     </div>
     <div class="mb-3">
       <label for="start-base" class="form-label">Start Base Number (optional)</label>
-      <input type="number" class="form-control" id="start-base" name="start-base" placeholder="Default: 1">
+      <input type="number" class="form-control" id="pinmol-start-base" name="pinmol-start-base" placeholder="Default: 1">
     </div>
     <div class="mb-3">
       <label for="end-base" class="form-label">End Base Number (optional)</label>
-      <input type="number" class="form-control" id="end-base" name="end-base" placeholder="Default: end of sequence">
+      <input type="number" class="form-control" id="pinmol-end-base" name="pinmol-end-base" placeholder="Default: end of sequence">
     </div>
     {% endif %}
 

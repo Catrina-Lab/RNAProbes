@@ -1,10 +1,8 @@
-{% extends 'base.html' %}
-
 {% block content %}
-<div class="container">
-  <div class="alert alert-success" role="alert">
-    <h4 class="alert-heading">Request Received!</h4>
-    <p>Your request has been received and is being processed. You will be notified when the results are ready.</p>
+<div class="container flex-grow" id="{{program.lower()}}-container-internal">
+  <div class="alert alert-warning alert-warning-custom" role="alert">
+    <h4 class="alert-heading">Request Received for {{program}}!</h4>
+    <p>Your request has been received for {{program}} and is being processed. You will be notified when the results are ready.</p>
   </div>
 </div>
 {% endblock %}
