@@ -1,5 +1,5 @@
-.aiexclude
-Temp_files/
+*.aiexclude
+Temp_files/*
 .idea/
 profile.html
 profile.json
