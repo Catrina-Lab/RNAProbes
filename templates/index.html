@@ -42,28 +42,33 @@
 {% endblock %}
 
 {% block scripts %}
-<script>
-  document.addEventListener('DOMContentLoaded', () => {
-    const form = document.getElementById('program-form');
-    const programCards = form.querySelectorAll('.program-card');
-    const selectLabel = document.getElementById('program-select-label');
+<script id="functions">
+    function changeWarningText(id, remove = false){
+      if(remove) document.getElementById(id).classList.remove("warning-text");
+      else document.getElementById(id).classList.add("warning-text");
+    }
 
-    programCards.forEach(card => {
-      card.addEventListener('click', () => {
-        const checkbox = card.querySelector('input[type="checkbox"]');
-        checkbox.checked = !checkbox.checked;
-        card.classList.toggle('selected', checkbox.checked);
-        selectLabel.classList.remove('warning-text');
-      });
-    });
-
-    form.addEventListener('submit', e => {
-      const selectedPrograms = form.querySelectorAll('input[type="checkbox"]:checked');
-      if (selectedPrograms.length === 0) {
-        e.preventDefault();
-        selectLabel.classList.add('warning-text');
+    function clickCard(programCard){
+      const checkbox = programCard.querySelector('input[type="checkbox"]'); //click the invisible checkbox
+      checkbox.checked = !checkbox.checked;
+      if(checkbox.checked) changeWarningText('program-select-label', true); //make it not red
+    }
+  </script>
+  
+  <script>
+    const form = document.querySelector('#program-form');
+    form.addEventListener('click', e => {
+      let clickedElement;
+      if(clickedElement = e.target.closest(".program-card")){ //if you clicked a program-card (works with dynamic elements)
+        clickCard(clickedElement);
       }
     });
-  });
-</script>
+    form.addEventListener('submit', e=>{
+      const selectedPrograms = form.querySelectorAll('input[type="checkbox"][name="programs"]:checked');
+      if(selectedPrograms.length === 0){
+        e.preventDefault();
+        changeWarningText('program-select-label');
+      }
+    });
+  </script>
 {% endblock %}
