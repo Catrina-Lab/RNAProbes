@@ -47,7 +47,8 @@ body {
   padding: 4rem 0;
   background-color: var(--card-background);
   border-radius: 15px;
-  margin-bottom: 3rem;
+  margin-bottom: 2rem;
+  margin-top: 1rem;
   box-shadow: var(--card-shadow);
 }
 
@@ -74,7 +75,9 @@ body {
   position: relative;
   overflow: hidden;
 }
-
+.fas, .card-icon {
+  display: none !important; /* hidden for now until I can come up with better icons (and can keep the proceed button on the page)*/
+}
 .program-card:hover {
   transform: translateY(-5px);
   box-shadow: var(--card-hover-shadow);

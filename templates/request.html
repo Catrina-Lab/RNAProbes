@@ -5,7 +5,7 @@
   {% include 'request-form.html' %}
 </div>
 <div id="response_container" class="container d-none">
-  <div class="text-center mb-5">
+  <div class="text-center mb-5 text-header">
     <h1 class="display-5">Processing Your Requests</h1>
     <p class="lead text-muted">You can monitor the progress of each tool below.</p>
   </div>
@@ -93,4 +93,18 @@
     }
   });
 </script>
+{% endblock %}
+
+{% block head_content %}
+<style>
+  .program-section {
+    background-color: #f8f9fa;
+    padding: 1.5rem;
+    border-radius: 10px;
+    border: 1px solid #dee2e6;
+  }
+  .text-header{
+    margin-top: 2rem;
+  }
+</style>
 {% endblock %}

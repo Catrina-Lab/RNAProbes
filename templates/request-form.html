@@ -1,8 +1,5 @@
-{% extends 'base.html' %}
-
-{% block content %}
 <div class="container">
-  <div class="text-center mb-5">
+  <div class="text-center mb-5 text-header">
     <h1 class="display-5">Start Your Analysis</h1>
     <p class="lead text-muted">Provide the necessary information for the selected tools.</p>
   </div>
@@ -28,7 +25,7 @@
           <div class="program-section mb-4">
             <h3 class="fs-4"><i class="fas fa-bullseye me-2"></i>TFOFinder Options</h3>
             <div class="mb-3">
-              <label for="tfo-probe-length" class="form-label">Probe Length</label>
+              <label for="tfofinder-probe-length" class="form-label">Probe Length</label>
               <input type="number" class="form-control" id="tfofinder-probe-length" name="tfofinder-probe-length" min="4" max="30" placeholder="e.g., 15" required>
               <div class="form-text">Choose a number between 4 and 30.</div>
             </div>
@@ -45,11 +42,11 @@
             </div>
             <div class="row">
               <div class="col-md-6 mb-3">
-                <label for="start-base" class="form-label">Start Base (Optional)</label>
+                <label for="pinmol-start-base" class="form-label">Start Base (Optional)</label>
                 <input type="number" class="form-control" id="pinmol-start-base" name="pinmol-start-base" placeholder="Default: 1">
               </div>
               <div class="col-md-6 mb-3">
-                <label for="end-base" class="form-label">End Base (Optional)</label>
+                <label for="pinmol-end-base" class="form-label">End Base (Optional)</label>
                 <input type="number" class="form-control" id="pinmol-end-base" name="pinmol-end-base" placeholder="Default: end">
               </div>
             </div>
@@ -65,15 +62,4 @@
     </div>
   </div>
 </div>
-{% endblock %}
 
-{% block head_content %}
-<style>
-  .program-section {
-    background-color: #f8f9fa;
-    padding: 1.5rem;
-    border-radius: 10px;
-    border: 1px solid #dee2e6;
-  }
-</style>
-{% endblock %}
