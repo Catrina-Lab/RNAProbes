@@ -454,7 +454,7 @@ if __name__ == "__main__":
     subprocess.check_output(["oligoscreen", mb_userpath / f"{fname}_oligoscreen_input.lis", mb_userpath / f"{fname}_oligoscreen_output.csv"])
     read_oligosc = pd.read_csv(mb_userpath / f"{fname}_oligoscreen_output.csv", delimiter = '\t', usecols=[1,2,3])
 
-    os.remove(mb_userpath / f"{fname}_oligoscreen_input.lis")
+    #os.remove(mb_userpath / f"{fname}_oligoscreen_input.lis")
     os.remove(mb_userpath / f"{fname}_oligoscreen_output.csv")
 
     #keep only probes that meet the energy requirements and sort them

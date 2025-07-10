@@ -4,6 +4,9 @@ import subprocess
 import itertools
 import math
 from pathlib import Path
+import RNAstructure
+
+RNAstructure.Oligowalk_object
 
 print("\n" * 5)
 print('smFISH_HybEff program  Copyright (C) 2022  Irina E. Catrina' + '\n' +
