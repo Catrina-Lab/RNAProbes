@@ -2,112 +2,95 @@
 
 {% block content %}
 <div id="form_container">
-{% include 'request-form.html' %}
+  {% include 'request-form.html' %}
 </div>
-<div id="response_container" class="container-xxl  flex-column d-none">
-    {% for program in programs %}
+<div id="response_container" class="container d-none">
+  <div class="text-center mb-5">
+    <h1 class="display-5">Processing Your Requests</h1>
+    <p class="lead text-muted">You can monitor the progress of each tool below.</p>
+  </div>
+  <div class="row justify-content-center">
+    <div class="col-lg-8">
+      {% for program in programs %}
         <div id="{{program}}-container">
-            {% include 'request-received.html' %}
+          {% include 'request-received.html' %}
         </div>
-    {% endfor %}
+      {% endfor %}
+    </div>
+  </div>
 </div>
-{% endblock %}
-
-{% block head_content %}
-<style>
-    .result-button {
-        box-shadow: 0px 0px 2px #0d970d;
-        margin-right: 13px;
-    }
-    .flex-item-right {
-        margin-left: auto;
-    }
-    .alert-warning-custom {
-        --bs-alert-bg: #f9ecc2;
-        --bs-alert-color: #362902;
-    }
-</style>
 {% endblock %}
 
 {% block scripts %}
-<script type="text/javascript">
-    const progs = {{programs | tojson}};
-    const result_urls = {}; //the urls to download files once ready
-    let form = document.querySelector("form");
-    let responseContainer = document.querySelector("#response_container");
-    let formContainer = document.querySelector("#form_container");
-    function switchView(){
-        formContainer.classList.toggle("d-none");
-        responseContainer.classList.toggle("d-none");
-        responseContainer.classList.toggle("d-xl-flex")
-    }
-    form.addEventListener("submit", e=>{
-        e.preventDefault();
-        switchView();
-        sendRequests();
+<script>
+  document.addEventListener('DOMContentLoaded', () => {
+    const form = document.querySelector("form");
+    if (!form) return;
+
+    const responseContainer = document.getElementById("response_container");
+    const formContainer = document.getElementById("form_container");
+    const programs = {{ programs | tojson }};
+    const resultUrls = {};
+
+    form.addEventListener("submit", e => {
+      e.preventDefault();
+      formContainer.classList.add("d-none");
+      responseContainer.classList.remove("d-none");
+      sendRequests();
     });
 
-    document.addEventListener('click', e=>{
-        if(e.target.id.includes("download-btn")){
-            downloadFile(e.target, e.target.id.split("-", 1)[0]);
-        }
-    })
+    document.addEventListener('click', e => {
+      const downloadBtn = e.target.closest('[id$="-download-btn"]');
+      if (downloadBtn) {
+        const program = downloadBtn.id.split("-", 1)[0];
+        downloadFile(program);
+      }
+    });
 
-    function sendRequests(){
-        progs.map(sendRequest);
+    function sendRequests() {
+      programs.forEach(sendRequest);
     }
-    async function sendRequest(program){
-        data = new FormData(form);
-        programsToSkip = progs.filter(e=>e!=program); //progs stores all of the current programs shows, so OK
-        [...data.keys()].forEach(e=>{
-            if(programsToSkip.includes(e.split("-",2)[0])) data.delete(e);
-        });
-        const response = await fetch(`/send-request?program=${program}`, {
-            method: "POST",
-            body: data,
-        });
-        responseJson = await response.json();
-        renderResponse(responseJson, program);
-        return responseJson;
+
+    async function sendRequest(program) {
+      const data = new FormData(form);
+      const response = await fetch(`/send-request?program=${program}`, {
+        method: "POST",
+        body: data,
+      });
+      const responseJson = await response.json();
+      renderResponse(responseJson, program);
     }
-    function renderResponse(response, program){
-        saveURL(response.zip, program);
-        renderTemplate(response.html, program);
+
+    function renderResponse(response, program) {
+      saveURL(response.zip, program);
+      renderTemplate(response.html, program);
     }
-    function saveURL(zip, program){
-        var zipFile = new Blob([base64ToUint8Array(zip)],{type:'application/zip'});
-        window.URL = window.URL || window.webkitURL;
-        newURL = window.URL.createObjectURL(zipFile);
-        result_urls[program] = newURL;
+
+    function saveURL(zip, program) {
+      const zipFile = new Blob([base64ToUint8Array(zip)], { type: 'application/zip' });
+      resultUrls[program] = URL.createObjectURL(zipFile);
     }
+
     function base64ToUint8Array(encoded) {
-        const binary = atob(encoded);
-        const bytes = new Uint8Array(binary.length);
-        for (let i = 0; i < bytes.length; i++) {
-            bytes[i] = binary.charCodeAt(i);
-        }
-        return bytes;
+      const binary = atob(encoded);
+      const bytes = new Uint8Array(binary.length);
+      for (let i = 0; i < bytes.length; i++) {
+        bytes[i] = binary.charCodeAt(i);
+      }
+      return bytes;
     }
 
-    function renderTemplate(html, program){
-        document.querySelector(`#${program}-container`).innerHTML = html;
+    function renderTemplate(html, program) {
+      document.getElementById(`${program}-container`).innerHTML = html;
     }
-    function downloadFile(button, program){
-        anchor = button.querySelector("a");
-        anchor.href = result_urls[program];
+
+    function downloadFile(program) {
+      const anchor = document.getElementById(`${program}-download-anchor`);
+      if (anchor && resultUrls[program]) {
+        anchor.href = resultUrls[program];
         anchor.click();
+      }
     }
-    /*
-        var blob = new Blob([atob(res.zip)],{type:'application/zip'})
-        var fileName = "myfile.txt";
-        var fileContent = "Page content..Page content..Page content..Page content..Page content..Page content..Page content..Page content..Page content..Page content..Page content..Page content..Page content..Page content..Page content..Page content..Page content..Page content..Page content..Page content..Page content..Page content..Page content..Page content..Page content..Page content..Page content..Page content..Page content..Page content..Page content..Page content..Page content..Page content..Page content..Page content..Page content..Page content..Page content..Page content..Page content..Page content..Page content..Page content..Page content..Page content..Page content..Page content..Page content..Page content..Page content..Page content..Page content..Page content...";
-        var myFile = new Blob([fileContent], {type: 'text/plain'});
-
-        window.URL = window.URL || window.webkitURL;
-        var dlBtn = document.getElementById("download");
-
-        dlBtn.setAttribute("href", window.URL.createObjectURL(myFile));
-        dlBtn.setAttribute("download", fileName);
-    */
+  });
 </script>
 {% endblock %}

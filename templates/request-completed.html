@@ -1,14 +1,13 @@
-{% block content %}
-<div class="container flex-grow" id="{{program.lower()}}-container">
-  <div class="alert alert-success" role="alert">
-    <h4 class="alert-heading">Request Completed for {{program}}!</h4>
-    <div class="d-flex align-items-center">
-      <p class="m-0">Your results for {{program}} are now ready!</p>
-      <button id="{{program}}-download-btn" class="btn btn-success result-button flex-item-right" type="button">Download Results
+<div class="card shadow-sm mb-4 border-success">
+  <div class="card-body">
+    <h5 class="card-title text-success"><i class="fas fa-check-circle me-2"></i>{{ program }}</h5>
+    <p class="card-text">Your results for {{ program }} are now ready!</p>
+    <div class="d-flex justify-content-end">
+      <button class="btn btn-outline-primary me-2" type="button">View Results</button>
+      <button id="{{program}}-download-btn" class="btn btn-primary" type="button">
+        <i class="fas fa-download me-2"></i>Download
         <a id="{{program}}-download-anchor" class="d-none" download="{{filename}}" target="_blank"></a>
       </button>
-      <button class="btn btn-success result-button" type="button">View Results</button>
     </div>
   </div>
 </div>
-{% endblock %}

@@ -1,98 +1,69 @@
 {% extends 'base.html' %}
 
-{% block head_content %}
-  <style>
-    .program-card {
-      cursor: pointer;
-      border: 2px solid transparent;
-      transition: border-color 0.2s ease-in-out, box-shadow 0.2s ease-in-out;
-      height: 100%;
-    }
-    .program-card:has(input[type="checkbox"]:checked) {
-      border-color: #0d6efd;
-      box-shadow: 0 0 10px rgba(13, 110, 253, 0.5);
-    }
-    .program-card .form-check-input {
-      position: absolute;
-      top: 10px;
-      right: 10px;
-    }
-    .warning-text {
-      color: #ea1212 !important;
-      font-weight: bold;
-    }
-  </style>
-{% endblock %}
-
 {% block content %}
-  <div class="container">
-    <h1 class="text-center mb-4">Welcome to the RNA Tool Suite</h1>
-    <p class="text-center text-muted" id="program-select-label">Select one or more programs to begin.</p>
-    <form action="/form" method="post" id="program-form">
-      <div class="row">
-        <div class="col-md-4">
-          <div class="card text-center program-card" data-program="sm-fish">
-            <div class="card-body">
-              <h5 class="card-title">smFISH</h5>
-              <p class="card-text">Single-molecule fluorescence in situ hybridization (smFISH) probe design, considering secondary strucutures.</p>
-              <input type="checkbox" name="programs" value="smFISH" class="form-check-input d-none">
-            </div>
-          </div>
-        </div>
-        <div class="col-md-4">
-          <div class="card text-center program-card" data-program="tfofinder">
-            <div class="card-body">
-              <h5 class="card-title">TFOFinder</h5>
-              <p class="card-text">Triplex-forming oligonucleotide (TFO) target designer for RNA.</p>
-              <input type="checkbox" name="programs" value="TFOFinder" class="form-check-input d-none">
-            </div>
-          </div>
-        </div>
-        <div class="col-md-4">
-          <div class="card text-center program-card" data-program="pinmol">
-            <div class="card-body">
-              <h5 class="card-title">PinMol</h5>
-              <p class="card-text">Molecular beacons designer for live cell imaging of mRNA targets.</p>
-              <input type="checkbox" name="programs" value="PinMol" class="form-check-input d-none">
-            </div>
-          </div>
-        </div>
-      </div>
-      <div class="text-center mt-4">
-          <button type="submit" class="btn btn-primary btn-lg">Proceed</button>
-      </div>
-    </form>
+  <div class="hero-section">
+    <h1 class="display-4">RNA Tool Suite</h1>
+    <p class="lead">A collection of powerful tools for RNA analysis and design.</p>
   </div>
 
+  <p class="text-center text-muted mb-4" id="program-select-label">Select one or more programs to begin.</p>
+
+  <form action="/form" method="post" id="program-form">
+    <div class="row">
+      <div class="col-md-4 mb-4">
+        <div class="card program-card" data-program="smFISH">
+          <div class="card-icon"><i class="fas fa-search-plus"></i></div>
+          <h5 class="card-title">smFISH</h5>
+          <p class="card-text">Probe design for single-molecule fluorescence in situ hybridization (smFISH), considering secondary structures.</p>
+          <input type="checkbox" name="programs" value="smFISH" class="form-check-input">
+        </div>
+      </div>
+      <div class="col-md-4 mb-4">
+        <div class="card program-card" data-program="TFOFinder">
+          <div class="card-icon"><i class="fas fa-bullseye"></i></div>
+          <h5 class="card-title">TFOFinder</h5>
+          <p class="card-text">Target designer for triplex-forming oligonucleotides (TFOs) in RNA.</p>
+          <input type="checkbox" name="programs" value="TFOFinder" class="form-check-input">
+        </div>
+      </div>
+      <div class="col-md-4 mb-4">
+        <div class="card program-card" data-program="PinMol">
+          <div class="card-icon"><i class="fas fa-map-pin"></i></div>
+          <h5 class="card-title">PinMol</h5>
+          <p class="card-text">Molecular beacon designer for live-cell imaging of mRNA targets.</p>
+          <input type="checkbox" name="programs" value="PinMol" class="form-check-input">
+        </div>
+      </div>
+    </div>
+    <div class="text-center mt-4">
+        <button type="submit" class="btn btn-primary btn-lg proceed-btn">Proceed</button>
+    </div>
+  </form>
 {% endblock %}
 
 {% block scripts %}
-  <script id="functions">
-    function makeRed(id, remove = false){
-      if(remove) document.getElementById(id).classList.remove("warning-text");
-      else document.getElementById(id).classList.add("warning-text");
-    }
+<script>
+  document.addEventListener('DOMContentLoaded', () => {
+    const form = document.getElementById('program-form');
+    const programCards = form.querySelectorAll('.program-card');
+    const selectLabel = document.getElementById('program-select-label');
 
-    function clickCard(programCard){
-      const checkbox = programCard.querySelector('input[type="checkbox"]'); //click the invisible checkbox
-      checkbox.checked = !checkbox.checked;
-      if(checkbox.checked) makeRed('program-select-label', true); //make it not red
-    }
-  </script>
-  <script>
-    const form = document.querySelector('#program-form');
-    form.addEventListener('click', e => {
-      let clickedElement;
-      if(clickedElement = e.target.closest(".program-card")){ //if you clicked a program-card (works with dynamic elements)
-        clickCard(clickedElement);
-      }
+    programCards.forEach(card => {
+      card.addEventListener('click', () => {
+        const checkbox = card.querySelector('input[type="checkbox"]');
+        checkbox.checked = !checkbox.checked;
+        card.classList.toggle('selected', checkbox.checked);
+        selectLabel.classList.remove('warning-text');
+      });
     });
-    form.addEventListener('submit', e=>{
-      data = new FormData(form)
-      if(!data.get('programs')){
+
+    form.addEventListener('submit', e => {
+      const selectedPrograms = form.querySelectorAll('input[type="checkbox"]:checked');
+      if (selectedPrograms.length === 0) {
         e.preventDefault();
-        makeRed('program-select-label');
+        selectLabel.classList.add('warning-text');
       }
     });
-  </script>
+  });
+</script>
 {% endblock %}

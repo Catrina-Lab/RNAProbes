@@ -1,0 +1,129 @@
+
+@import url('https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;600;700&display=swap');
+
+:root {
+  --primary-color: #0a58ca;
+  --secondary-color: #6c757d;
+  --background-color: #f0f2f5;
+  --text-color: #333;
+  --card-background: #ffffff;
+  --card-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+  --card-hover-shadow: 0 6px 20px rgba(0, 0, 0, 0.15);
+}
+
+body {
+  background-color: var(--background-color);
+  color: var(--text-color);
+  font-family: 'Poppins', sans-serif;
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+}
+
+.content-wrapper {
+  flex: 1;
+}
+
+.navbar {
+  background-color: var(--card-background) !important;
+  box-shadow: var(--card-shadow);
+  padding: 1rem 0;
+}
+
+.navbar-brand {
+  font-weight: 600;
+  color: var(--primary-color) !important;
+}
+
+.footer {
+  background-color: var(--card-background);
+  padding: 2rem 0;
+  margin-top: 4rem;
+  box-shadow: 0 -4px 15px rgba(0, 0, 0, 0.05);
+}
+
+.hero-section {
+  text-align: center;
+  padding: 4rem 0;
+  background-color: var(--card-background);
+  border-radius: 15px;
+  margin-bottom: 3rem;
+  box-shadow: var(--card-shadow);
+}
+
+.hero-section h1 {
+  font-weight: 700;
+  color: var(--primary-color);
+}
+
+.hero-section p {
+  font-size: 1.15rem;
+  color: var(--secondary-color);
+}
+
+.program-card {
+  background-color: var(--card-background);
+  border: 2px solid transparent;
+  border-radius: 15px;
+  padding: 2rem;
+  text-align: center;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  box-shadow: var(--card-shadow);
+  height: 100%;
+  position: relative;
+  overflow: hidden;
+}
+
+.program-card:hover {
+  transform: translateY(-5px);
+  box-shadow: var(--card-hover-shadow);
+}
+
+.program-card.selected {
+  border-color: var(--primary-color);
+  box-shadow: 0 0 20px rgba(10, 88, 202, 0.3);
+}
+
+.program-card .card-icon {
+  font-size: 3rem;
+  color: var(--primary-color);
+  margin-bottom: 1.5rem;
+  transition: all 0.3s ease;
+}
+
+.program-card:hover .card-icon {
+  transform: scale(1.1);
+}
+
+.program-card .card-title {
+  font-weight: 600;
+  margin-bottom: 1rem;
+}
+
+.program-card .card-text {
+  color: var(--secondary-color);
+}
+
+.program-card .form-check-input {
+  display: none;
+}
+
+.proceed-btn {
+  background-color: var(--primary-color);
+  border: none;
+  font-weight: 600;
+  padding: 0.75rem 2.5rem;
+  transition: all 0.3s ease;
+}
+
+.proceed-btn:hover {
+  background-color: #084da3;
+  transform: translateY(-3px);
+}
+
+.warning-text {
+  color: #dc3545 !important;
+  font-weight: bold;
+  transition: all 0.3s ease;
+}

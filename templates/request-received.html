@@ -1,8 +1,13 @@
-{% block content %}
-<div class="container flex-grow" id="{{program.lower()}}-container-internal">
-  <div class="alert alert-warning alert-warning-custom" role="alert">
-    <h4 class="alert-heading">Request Received for {{program}}!</h4>
-    <p>Your request has been received for {{program}} and is being processed. You will be notified when the results are ready.</p>
+<div class="card shadow-sm mb-4">
+  <div class="card-body">
+    <h5 class="card-title text-primary"><i class="fas fa-cogs me-2"></i>{{ program }}</h5>
+    <p class="card-text">Your request is being processed. You will be notified when the results are ready.</p>
+    <div class="d-flex align-items-center">
+      <strong>Status:</strong>
+      <div class="spinner-border spinner-border-sm ms-2" role="status">
+        <span class="visually-hidden">Loading...</span>
+      </div>
+      <span class="ms-2">In Progress</span>
+    </div>
   </div>
 </div>
-{% endblock %}
