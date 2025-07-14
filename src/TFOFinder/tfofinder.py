@@ -8,7 +8,7 @@ from numpy.f2py.rules import arg_rules
 from pandas import DataFrame
 
 sys.path.append(str(Path(__file__).parent.parent))
-from util import input_int_in_range
+from util import input_int_in_range, range_type, path_string
 
 probeMin = 4
 probeMax = 30
@@ -74,7 +74,7 @@ def convert_ct_to_dataframe(file):
 
     # dtype={"baseno": int, "base": str, "bs_bind": int}
     file.seek(0)
-    ct_df =  pd.read_csv(file, sep=' +', usecols=[0,1,4], names=["baseno", "base", "bs_bind"], engine='python')
+    ct_df =  pd.read_csv(file, sep='\\s+', usecols=[0,1,4], names=["baseno", "base", "bs_bind"], engine='python')
     initial_row_count = len(ct_df)
     ct_df = ct_df[~ct_df["base"].isin(match)]
     structure_count = initial_row_count - len(ct_df)
@@ -139,27 +139,13 @@ def sequence_probe(baseno: int, probe_len: int, structure_count: int, sscount_df
 
 def get_command_line_arguments(args):
     import argparse, functools
-    def range_type(string, min=probeMin, max=probeMax):
-        value = int(string)
-        if min <= value <= max:
-            return value
-        else:
-            raise argparse.ArgumentTypeError(
-                f'value not in range {min}-{max}. Please either keep it in range or leave it out.')
-
-    def path_string(string, suffix=".ct"):
-        path = Path(string).resolve()
-        if path.is_file() and path.suffix in suffix:  # in returns true if string ==
-            return str(path)
-        else:
-            raise argparse.ArgumentTypeError(f'Invalid file given. File must be an existing {suffix} file')
-
     parser = argparse.ArgumentParser(
         prog='TDOFinder',
         description='Triplex-forming oligonucleotide (TFO) target designer for RNA.')
     parser.add_argument("-f", "--file", type=path_string)
     parser.add_argument("-o", "--output-dir", type=functools.partial(path_string, suffix=""))
-    parser.add_argument("-p", "--probes", type=range_type, metavar=f"[{probeMin}-{probeMax + 1}]",
+    parser.add_argument("-p", "--probes", type=functools.partial(range_type, min=probeMin, max=probeMax),
+                        metavar=f"[{probeMin}-{probeMax + 1}]",
                         help=f'The length of TFO probes, {probeMin}-{probeMax} inclusive')
     parser.add_argument("-s", "--emit-sscount", action="store_true")
     parser.add_argument("-v", "--verbose", action="store_true")
@@ -182,10 +168,10 @@ if __name__ == "__main__":
               "Feel free to use the CLI or to run the program directly with command line arguments \n"
               "(view available arguments with --help).\n\n"
     
-              f"{"->" * 40}\n\n"
+              f"{'->' * 40}\n\n"
               "WARNING: Previous files will be overwritten or appended!  Save them in a\n"
               "different location than the current input file, or rename them.\n\n"
-              f"{"->" * 40}")
+              f"{'->' * 40}")
     
     filein = arguments.file or input('Enter the ct file path and name: ')
     mb_userpath, fname, suffix = parse_file_name(filein, arguments.output_dir)
@@ -195,7 +181,7 @@ if __name__ == "__main__":
     
     #convert the ct file to a txt
     with open(filein,'r') as file:
-        tfo_probes_result = calculate_result(probe_length, file, filename = filein, arguments = arguments)
+        tfo_probes_result = calculate_result(file, probe_length, filename = filein, arguments = arguments)
 
     #todo: should it be add
     #todo: ask if should add extra newline at end (trivial issue)
