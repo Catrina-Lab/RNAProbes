@@ -9,6 +9,7 @@ from pandas import DataFrame
 
 sys.path.append(str(Path(__file__).parent.parent))
 from util import input_int_in_range, range_type, path_string
+from RNAUtil import convert_ct_to_dataframe, getSSCountDF
 
 probeMin = 4
 probeMax = 30
@@ -39,7 +40,7 @@ def calculate_result(filein, probe_length: int, filename="", arguments = None) -
     #todo: ask if can get rid of this and place before
     if should_print(arguments): print('Number of Structures = ' + str(structure_count) + ' \n\n...Please wait...\n')
 
-    sscount_df = getSSCountDF(ct_df, arguments and arguments.emit_sscount)
+    sscount_df = getSSCountDF(ct_df, arguments and arguments.emit_sscount, output_file = mb_userpath / f"{fname}_sscount.csv")
     consec = get_consecutive_not_ss(probe_length, sscount_df)
     #todo: issue: what if they're not ever double-stranded in the same structure??
 
@@ -63,42 +64,6 @@ def get_consecutive_not_ss(probe_length: int, sscount_df : DataFrame) -> DataFra
     consec = dscount.loc[dscount.baseno.diff(-1) == -1]  # and the one after
     return consec.loc[consec.baseno.diff(-(probe_length - 2)) == -(probe_length - 2)]
 
-
-def convert_ct_to_dataframe(file):
-    """
-        Convert the ct file to a dataframe. This also gives the number of structures in the ct file.
-        This method should be inside of a with expression.
-        :param filename: the file to read and convert into a dataframe.
-        :return: (Dataframe, int structure_count)
-        """
-
-    # dtype={"baseno": int, "base": str, "bs_bind": int}
-    file.seek(0)
-    ct_df =  pd.read_csv(file, sep='\\s+', usecols=[0,1,4], names=["baseno", "base", "bs_bind"], engine='python')
-    initial_row_count = len(ct_df)
-    ct_df = ct_df[~ct_df["base"].isin(match)]
-    structure_count = initial_row_count - len(ct_df)
-    ct_df = ct_df.astype({"baseno": int, "base": str, "bs_bind": int})
-    return (ct_df, structure_count)
-
-
-def getSSCountDF(ct_dataframe : DataFrame, save_to_file: bool = False) -> DataFrame:
-    """
-    Get the SSCount from a dataframe
-    :param ct_dataframe: ct converted to a dataframe
-    :return: Dataframe
-    """
-
-    df_grouped = ct_dataframe.groupby(['baseno', 'base'], as_index = False).agg(lambda x: x[x == 0].count())
-    df_grouped.rename(columns={'bs_bind': 'sscount'}, inplace=True)
-    df_grouped = df_grouped.reindex(columns=['baseno','sscount','base'])
-
-
-    df_grouped['base'] = df_grouped.base.replace('T', 'U')
-
-    if save_to_file: df_grouped.to_csv(mb_userpath / f"{fname}_sscount.csv", index=False, header=False)
-
-    return df_grouped
 
 
 def get_final_string(file_name : str, probe_length, structure_count, consec, sscount_df):
@@ -145,13 +110,13 @@ def get_command_line_arguments(args):
     parser.add_argument("-f", "--file", type=path_string)
     parser.add_argument("-o", "--output-dir", type=functools.partial(path_string, suffix=""))
     parser.add_argument("-p", "--probes", type=functools.partial(range_type, min=probeMin, max=probeMax),
-                        metavar=f"[{probeMin}-{probeMax + 1}]",
+                        metavar=f"[{probeMin}-{probeMax}]",
                         help=f'The length of TFO probes, {probeMin}-{probeMax} inclusive')
     parser.add_argument("-s", "--emit-sscount", action="store_true")
     parser.add_argument("-v", "--verbose", action="store_true")
     parser.add_argument("-q", "--quiet", action="store_true")
     parser.add_argument("-w", "--overwrite", action="store_true",
-                        help="Overwrite the returned TFO Probes file. Default it to append")
+                        help="Overwrite the returned TFO Probes file. Default is to append")
 
     args = parser.parse_args(args)
     args.print = True  # denotes that this is from the command line

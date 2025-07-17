@@ -1,4 +1,5 @@
 #!/anaconda/bin/python3
+import argparse
 import csv
 import sys
 import pandas as pd
@@ -9,15 +10,30 @@ import re
 import fileinput
 from pathlib import Path
 from Bio.Blast import NCBIXML
-print("\n"*5)
-print('PinMol  Copyright (C) 2017  Irina E. Catrina' + '\n'+
-'This program comes with ABSOLUTELY NO WARRANTY;'  + '\n' + 
-'This is free software, and you are welcome to redistribute it' + '\n'+
-'under certain conditions; for details please read the included GNU_GPL.txt file' + '\n')
-undscr = "->"*30
-print(undscr)
-print("\n"+"WARNING: Previous files will be overwritten!  Save them in a "+"\n"+"different location than the current file, or rename them to "+"\n"+"ensure they are not misused (e.g. use probes from a different target)."+"\n")
-print(undscr)
+from pandas import DataFrame
+
+from src.util import input_int_in_range
+
+sys.path.append(str(Path(__file__).parent.parent))
+from util import input_int_in_range, range_type, path_string, path_arg, remove_if_exists
+from RNAUtil import convert_ct_to_dataframe, getSSCountDF
+
+undscr = ("->" * 40) + "\n"
+copyright_msg = (f'{"\n" * 6}'
+      f'smFISH_HybEff program  Copyright (C) 2022  Irina E. Catrina\n' +
+      'This program comes with ABSOLUTELY NO WARRANTY;\n' +
+      'This is free software, and you are welcome to redistribute it\n' +
+      'under certain conditions; for details please read the GNU_GPL.txt file.\n' +
+      undscr +
+      "\nWARNING: Previous files will be overwritten or appended!\n" +
+      undscr)
+
+probeMin = 18
+probeMax = 26
+probesToSaveMin = 2
+probesToSaveMax = 50
+match = ["ENERGY", "dG"]  # find header rows in ct file
+
 
 def readCtFile(filein):
     filein_path = Path(filein).resolve()  # Convert the filein to a Path object and resolve its full path
@@ -25,51 +41,20 @@ def readCtFile(filein):
     fname = filein_path.stem
     return (mb_userpath, fname)
 
-def readSScountFile(filename): #sscount file for molecular beacon design
-    userpath = os.path.dirname(filename) #use the path of input to save all files
-    with open(filename) as infile: #check if the input file is txt and if Us are present not Ts
-        if 'T' in infile.read():
-            print('Wrong type of file (not txt) OR you may have used DNA parameters to fold your target RNA!')
-            sys.exit('Try again using RNA parameters!')
-    baselines = []
-##    with open(filename) as infile: #clean-up the file remove whitespaces from left side
-##        for line in infile:
-##            line = line.lstrip(" ")
-##            newlines = re.sub(' +', ' ', line)
-##            if not line:
-##                continue
-##            baselines.append(newlines.upper())
-    #so = int(baselines[0]) #number of suboptimal structures
-    return (userpath, baselines)
-
-def seqTarget(f): #sequence of target & sscount for each probe as fraction (1 for fully single stranded)
-    bl = [[],[],[]]
-    reader = csv.reader(f)
-    for row in reader:
-        for col in range(3):
-            bl[col].append(row[col])
-    sscount = bl[1]
-    position = bl[0]
-    max_base = bl[0][-1]
-    bases = bl[2]
-    seq = ''.join(bases)
-    size = len(seq)
-    return(sscount, position, max_base, bases, seq, size)
+def seqTarget(df: DataFrame): #sequence of target & sscount for each probe as fraction (1 for fully single stranded)
+    max_base = df.baseno.iat[-1]
+    seq = ''.join(df.base)
+    size = len(df)
+    return df.sscount.to_list(), df.baseno.to_list(), max_base, df.base.to_list(), seq, size
 
 def itersplit_into_x_chunks(argum, size, chunksize): #split sequence in chunks of probe size
     for pos in range(0, size-chunksize+1):
         yield argum[pos:pos+chunksize]
 
+basecomplement = str.maketrans({'A': 'U', 'C': 'G', 'G': 'C', 'U': 'A'})
 def reverse_complement(seq): #generate RNA complement
     return seq.translate(basecomplement)[::-1]
 
-def probeLength(probe): #input desired probe length; limited to range[18,26)]
-    if probe <18 or probe >26:
-        print('The value you entered is incorrect!')
-        sys.exit('Try again!')
-    else:
-        probe = probe
-    return (probe)
 
 def seqProbes(mb_seq, mb_size, mb_sscount, probe):
     result = list(itersplit_into_x_chunks(mb_seq, mb_size, probe))
@@ -99,61 +84,46 @@ def seqProbes(mb_seq, mb_size, mb_sscount, probe):
     sumsl = []
     for i in result2:
         i = list(map(int, i))
-        sums = sum(i)/(probe*mb_so)
+        sums = sum(i)/(probe*structure_count)
         sumsl.append(sums)
     return (jl, perl, sumsl, basesl, Tml) #put together all data as indicated in header
 
-def regionTarget(tg_start, tg_end): #if only a region of the target needs to be considered
-    tg_diff = tg_end - tg_start
-    assert(tg_start>0 and tg_end>0), "The base numbers should be positive and larger then zero!"
-    if tg_diff < 0: #consider only probes within the requested region of target RNA, but check that the program can finish
-        print("The number of end base cannot be smaller than the number of the start base!")
-        sys.exit('Try again!')
-    elif tg_diff < probe:
-        print("You have to enter a region with a size larger than the probe size!")
-        sys.exit('Try again!')
-    elif tg_start >=1 and tg_end <= int(mb_max_base):
-        df = pd.read_csv(mb_userpath / f"{fname}_all_probes.csv")
-        tgstart = tg_start - 1
-        tgend = tg_end - probe + 2
-        slice2 = df[tgstart:tgend]
-        for row in slice2:
-            slice2 = slice2.sort_values(by='sscount', ascending=False) #sort descending by sscount = larger sscount more accessible target region
-        return(slice2)
+def regionTarget(arguments: argparse.Namespace) -> tuple[DataFrame, int, int]:
+    tg_start = input_int_in_range(
+        msg="If a specific region within the target is needed, please enter the number of start base (the initial base is 1): ",
+        min=1, max=mb_max_base + 1, initial_value=arguments.start, retry_if_fail=arguments.print)
+    tg_end = input_int_in_range(msg=f"  and the number of end base or -1 for the max (minimum {tg_start + probe}): ",
+                                fail_message="The end value must be at least the start value + probe_length ({tg_start + probe}) and less than the "
+                                             "max base ({mb_max_base} or -1).",
+                                min=tg_start + probe, max=mb_max_base + 1, initial_value=arguments.end,
+                                extra_predicate=lambda x: x == -1,
+                                retry_if_fail=arguments.print)
 
-def numberProbes(no_pb):  #how many probes should be retained; limited to range [2, 50]
-    if no_pb > int(tg_end-tg_start):
-        print("This number is too large! You cannot enter a number larger then "+ str(tg_end-tg_start)+ " !")
-        sys.exit('Try again!')
-    elif row_no==0:
-            print("No probes meet the criteria for the selected region, please expand the search region.")
-            sys.exit('Try again!')
-    elif no_pb > row_no and row_no > 0:
-        print("Only "+str(row_no)+" meet the criteria.  Instead of "+ str(no_pb)+", " + str(row_no)+ " probe(s) will be considered")
-        if row_no > 1:
-            no_pb = row_no
-            input1 = open(mb_userpath / f"{fname}_probes_sortedby5.csv", 'r').read().split('\n')
-            output = open(mb_userpath / f"{fname}_DG_probes.csv", 'w')
-            output.write('\n'.join(input1))
-            output.close()
-        elif row_no==1:
-            no_pb = row_no
-            input1 = open(mb_userpath / f"{fname}_probes_sortedby5.csv", 'r')
-            output.write(input1)
-            output.close()
+    tg_end = mb_max_base if tg_end == -1 else tg_end
+    #if only a region of the target needs to be considered
+    df = pd.read_csv(mb_userpath / f"{fname}_all_probes.csv") #change
+    tgstart = tg_start - 1
+    tgend = tg_end - probe + 2
+    slice2 = df[tgstart:tgend].sort_values(by='sscount', ascending=False, ignore_index=True) #sort descending by sscount = larger sscount more accessible target region
+    return slice2, tg_start, tg_end
 
-    elif no_pb > 1 and no_pb <= row_no and no_pb <= 50:
-        no_pb = no_pb
-        input1 = open(mb_userpath / f"{fname}_probes_sortedby5.csv", 'r').read().split('\n')
-        outputData = input1[:no_pb+1]
-        output = open(mb_userpath / f"{fname}_DG_probes.csv", 'w')
-        output.write('\n'.join(outputData))
-        output.close()
-    return(no_pb)
+def get_DG_probes(no_pb: int, data_sorted: DataFrame, should_print: bool=False) -> tuple[int, DataFrame]:  #how many probes should be retained; limited to range [2, 50]
+    # no need to exit, just use this as a max...
+    # if no_pb > int(tg_end - tg_start):
+    #     print("This number is too large! You cannot enter a number larger then "+ str(tg_end-tg_start)+ " !")
+    #     sys.exit('Try again!')
+    # else:
+    row_no = len(data_sorted)
+    if no_pb > row_no and should_print: print("Only "+str(row_no)+" meet the criteria.  Instead of "+ str(no_pb)+", " + str(row_no)+ " probe(s) will be considered")
 
-def blastChoice(blastm): #perform blast separately
+    DG_probes = data_sorted[:no_pb] #limit the length of the list
+    DG_probes.to_csv(mb_userpath / f"{fname}_DG_probes.csv", index=False)
+
+    return min(no_pb, row_no), DG_probes
+
+def blastChoice(blastm, blast_file=None): #perform blast separately
     print ("\n"*2+'Please use the file blast_picks.fasta to perform blast with refseq-rna database, and desired organism.'+'\n'+' For targets other than mRNAs make sure you use the Nucleotide collection (nr/nt) instead!')
-    save_file = input('Enter path and file name for saved blast XML file: ')
+    save_file = blast_file or input('Enter path and file name for your existing blast XML file: ')
     results3 = open(save_file, 'r')
     records= NCBIXML.parse(results3)
 
@@ -190,7 +160,7 @@ def stemDesign(): #design the stem of the final probes
             for col in range(2):
                 tw[col].append(row[col])
         bs_ps =tw[0]
-        fseq =tw[1]
+        fseq = tw[1]
         seq_slc = []
 
         for item in fseq:
@@ -220,27 +190,20 @@ def stemDesign(): #design the stem of the final probes
                     stem2 = ['G', X, 'U', Y]
                     stem3 = ['G', 'A', 'G', X]
                     stem4 = [X, 'G', 'A', 'G']
+
                     stem5 = ['G', 'U', X, 'G']
                     stem6 = [X, 'G', 'U', Y]
                     stem7 = ['G', 'A', X, 'G']
                     stem8 = [X, 'G', 'A', Y]
+
                     stem9 = [X, 'U', 'G', Y]
                     stem10 = ['G', X, 'U', 'G']
                     stem11 = [X, 'A', 'G', Y]
                     stem12 = ['G', X, 'A', 'G']
 
-                    slco1.append(stem1)
-                    slco1.append(stem2)
-                    slco1.append(stem3)
-                    slco1.append(stem4)
-                    slco2.append(stem5)
-                    slco2.append(stem6)
-                    slco2.append(stem7)
-                    slco2.append(stem8)
-                    slco3.append(stem9)
-                    slco3.append(stem10)
-                    slco3.append(stem11)
-                    slco3.append(stem12)
+                    slco1.extend([stem1, stem2, stem3, stem4])
+                    slco2.extend([stem5, stem6, stem7, stem8])
+                    slco3.extend([stem9, stem10, stem11, stem12])
                 slcol1 = list(slco1)
                 slcol2 = list(slco2)
                 slcol3 = list(slco3)
@@ -292,129 +255,76 @@ def stemDesign(): #design the stem of the final probes
             with open(mb_userpath / f"{fname}_{str(i)}.seq", 'w') as fiseq:
                 fiseq.write(';'+'\n'+ str(i) + ' at base # ' + bs_ps[i-1] + ' molecular beacon' + '\n' + stem.strip() + item.strip() + stemr.strip()+'1')
         return(i)
+def exit(msg : str, mb_userpath):
+    clean_files(mb_userpath)
+    sys.exit(msg)
 
+def clean_files(mb_userpath: Path):
+    remove_if_exists(mb_userpath / f"{fname}_mb_picks.csv")
+    remove_if_exists(mb_userpath / f"{fname}_blast_results_picks.csv")
+    remove_if_exists(mb_userpath / f"{fname}_all_probes.csv")
+    remove_if_exists(mb_userpath / f"{fname}_top_mb_picks.csv")
+    remove_if_exists(mb_userpath / f"{fname}_probes_forblast.csv")
+    remove_if_exists(mb_userpath / f"{fname}_blast_results.csv")
+    remove_if_exists(mb_userpath / f"{fname}_oligoscreen_input.lis")
+    remove_if_exists(mb_userpath / f"{fname}_oligoscreen_output.csv")
+
+def get_command_line_arguments(args):
+    import argparse, functools
+    parser = argparse.ArgumentParser(
+        prog='PinMol',
+        description='Molecular beacon designer for live-cell imaging of mRNA targets.')
+    parser.add_argument("-f", "--file", type=path_string)
+    parser.add_argument("-o", "--output-dir", type=functools.partial(path_arg, suffix=""))
+    parser.add_argument("-p", "--probes", type=functools.partial(range_type, min=probeMin, max=probeMax),
+                        metavar=f"[{probeMin}-{probeMax}]",
+                        help=f'The length of PinMol probes, {probeMin}-{probeMax} inclusive')
+    parser.add_argument("-s", "--emit-sscount", action="store_true")
+    parser.add_argument("-v", "--verbose", action="store_true")
+    parser.add_argument("-q", "--quiet", action="store_true")
+    parser.add_argument("-w", "--overwrite", action="store_true",
+                        help="Overwrite the returned PinMol Probes file. Default is to append")
+    parser.add_argument("--start", type=int, help="The start base to look for probs, min 1")
+    parser.add_argument("--end", type=int, help="The start base to look for probs, must be greater than start (use -1 for the entire sequence)")
+    parser.add_argument("-bf", "--blast-file", type=functools.partial(path_string, suffix="xml"))
+    parser.add_argument("-pc", "--probe-count-max", type=functools.partial(range_type, min=probesToSaveMin, max=probesToSaveMax),
+                        metavar=f"[{probesToSaveMin}-{probesToSaveMax}]",
+                        help=f'The maximum amount of probes to save, {probesToSaveMin}-{probesToSaveMax} inclusive')
+    parser.add_argument("-k", "--keep-files", action="store_true")
+
+    arg_group = parser.add_argument_group('Blast Alignment', 'Blast alignment command line settings. If none given, will ask')
+    group = arg_group.add_mutually_exclusive_group()
+    group.add_argument("-b", "--blast", action="store_const", const="y", help="Use blast alignment information to determine cross homology.")
+    group.add_argument("-nb", "--no-blast", action="store_const", const="n", help="Don't use blast alignment information to determine cross homology.")
+
+    args = parser.parse_args(args)
+    args.print = True  # denotes that this is from the command line
+    return args
+
+def should_print(arguments, is_content_verbose = False):
+    return arguments and arguments.print and not arguments.quiet and (not is_content_verbose or arguments.verbose)
 
 
 if __name__ == "__main__":
-    filein = input('Enter the ct file path and name: ')
+    arguments = get_command_line_arguments(sys.argv[1:])
+    print(copyright_msg)
+
+    filein = arguments.file or input('Enter the ct file path and name: ')
     mb_userpath, fname = readCtFile(filein)
 
-    match = ["ENERGY", "dG"] #find header rows in ct file
+    probe = arguments.probes or input_int_in_range(min = probeMin, max = probeMax + 1, msg = f"Enter the length of a probe; a number between {probeMin} and {probeMax} inclusive: ",
+                               fail_message = f'You must type a number between {probeMin} and {probeMax}, try again: ')
+    #region get sscount?? strct
+    with open(filein, "r") as file:
+        ct_df, structure_count = convert_ct_to_dataframe(file)
+    sscount_df = getSSCountDF(ct_df, arguments.emit_sscount, mb_userpath / f"{fname}_sscount.csv")
 
-    while True: #probe length?
-        try:
-            probe=int(input("Enter the length of probe; a number between 18 and 26: "))
-        except:
-            print('You must type a number between 18 and 26, try again:')
-            continue
+    mb_sscount, mb_position, mb_max_base, mb_bases, mb_seq, mb_size = seqTarget(sscount_df)
 
-        else:
-            probe = probeLength(probe)
-            break
-        
-    with open(filein,'r') as firstfile, open(mb_userpath / f"{fname}_new_input.txt",'w') as ct_file:
-        for line in firstfile:
-                 ct_file.write(line)
+    #endregion get sscount
 
-    ct_file = mb_userpath / f"{fname}_new_input.txt"
-    strct = 0
-    with open(ct_file, 'r') as infile:
-        for row in infile:
-            if any(x in row for x in match):
-                strct += 1
-        print ('Number of Structures = '+str(strct) + ' ...Please wait...')
-        mb_so = strct
-    for lines in fileinput.FileInput(ct_file, inplace=1):
-        lines2 = ",".join(lines.split())
-        if lines == '': continue
-        print (lines2)
-
-    with open(ct_file, 'r') as infile2, open(mb_userpath / f"{fname}_base_file.csv", 'w') as csv_file:
-        reader = csv.reader(infile2)
-        writer = csv.writer(csv_file, delimiter = ',', lineterminator = '\n')
-        writer.writerow(["baseno","base","bs_bf", "bs_aft", "bs_bind", "base2"])
-        for row in reader:
-            if not any(x in row for x in match):
-                writer.writerow(row)
-                csv_file.flush() # whenever you want
-
-    mb_pick = pd.read_csv(mb_userpath / f"{fname}_base_file.csv", sep=',', usecols=[0,1,4], dtype=object)
-    mb_pick.to_csv(mb_userpath / f"{fname}_three_col.csv", index=False)
-
-    with open (mb_userpath / f"{fname}_three_col.csv", 'r') as infile3, open(mb_userpath / f"{fname}_sscount1.csv", 'w') as outfile3:
-        cls = [[],[],[]]
-        reader = csv.reader(infile3)
-        for row in reader:
-           for col in range (3):
-               cls[col].append(row[col])
-           base_nol = cls[0]
-           basel = cls[1]
-           sscntl = cls[2]
-
-           sscntl = [1 if x == '0' else 0 for x in sscntl]
-
-        writer = csv.writer(outfile3)
-        rows = zip(base_nol, sscntl, basel )
-        for row in rows:
-            writer.writerow(row)
-
-    df = pd.read_csv(mb_userpath / f"{fname}_sscount1.csv")
-
-    df_grouped = df.groupby(['baseno', 'base'], as_index = False).sum()
-
-    a = pd.DataFrame(df_grouped)
-    a.to_csv(mb_userpath / f"{fname}_base_grouped.csv", index=False)
-
-    with open (mb_userpath / f"{fname}_base_grouped.csv", 'r') as infile4, open(mb_userpath / f"{fname}_sscount.csv", 'w') as outfile4:
-        cls = [[],[],[]]
-        reader = csv.reader(infile4)
-        next(infile4)
-        for row in reader:
-            if not any(x in row for x in match):
-                for col in range (3):
-                    cls[col].append(row[col])
-                    base_nol = cls[0]
-                    basel2 = cls[1]
-                    basel = [sub.replace('T', 'U') for sub in basel2]
-                    sscntl = cls[2]
-        writer = csv.writer(outfile4, delimiter = ',', lineterminator = '\n')
-        rows = zip(base_nol, sscntl, basel )
-        for row in rows:
-            writer.writerow(row)
-
-    with open(mb_userpath / f"{fname}_sscount.csv", 'r') as f:
-        mb_sscount, mb_position, mb_max_base, mb_bases, mb_seq, mb_size = seqTarget(f)
-
-
-
-
-
-
-    #filename = input('Enter a file name: ') # request ss-count file path and name
-
-    mb_baselines = readSScountFile(mb_userpath / f"{fname}_sscount.csv")
-
-    
-
-##    with open (mb_userpath+'/usetxtfile.txt', 'w') as outfile:
-##        for line in mb_baselines:
-##            outfile.write(line)
-##
-##    with open(mb_userpath+'/usetxtfile.txt', 'r') as infile, open(mb_userpath+'/sscounttxt_tocsv.csv', 'w') as csv_file:
-##        #next(infile)
-##        reader = csv.reader(infile, delimiter = ' ')
-##        writer = csv.writer(csv_file, delimiter = ",", lineterminator = '\n')
-##        writer.writerows(reader)
-##
-##    os.remove(mb_userpath+'/usetxtfile.txt')
-
-##    with open(mb_userpath / f"{fname}_sscount.csv", 'r') as f:
-##        mb_sscount, mb_position, mb_max_base, mb_bases, mb_seq, mb_size = seqTarget(f)
-
-    #os.remove(mb_userpath / f"{fname}_sscount.csv")
-
-    basecomplement = str.maketrans({'A': 'U', 'C': 'G', 'G': 'C', 'U': 'A'})
-    mb_jl, mb_perl, mb_sumsl, mb_basesl, mb_Tml = seqProbes(mb_seq, mb_size, mb_sscount, probe)
+    #sequence probes, get all
+    mb_jl, mb_perl, mb_sumsl, mb_basesl, mb_Tml = seqProbes(mb_seq, mb_size, mb_sscount, probe) #todo: lazy seq
 
     with open(mb_userpath / f"{fname}_all_probes.csv", 'w') as csv_file:
         writer = csv.writer(csv_file, lineterminator='\n')
@@ -423,72 +333,52 @@ if __name__ == "__main__":
         for row in rows:
             writer.writerow(row)
 
-    tg_start = int(input("If a specific region within the target is needed, please enter the number of start base, or 1: "))
-    tg_end = int(input("  and the number of end base or max number of bases " + str(mb_max_base) + ": "))
-    mb_slice2 = regionTarget(tg_start, tg_end)
-    mb_slice2.to_csv(mb_userpath / f"{fname}_all_probes_sorted_ss.csv", index=False)
 
-    os.remove(mb_userpath / f"{fname}_all_probes.csv")
+    #get probes within a slice with a %GC >? 30 and < 56
+    #todo: only sequence probes in region?
+    (region_probes, tg_start, tg_end) = regionTarget(arguments)
+    GC_probes = region_probes[(region_probes["%GC"] < 56) & (region_probes["%GC"] > 30)]
 
-    with open(mb_userpath / f"{fname}_all_probes_sorted_ss.csv",'r') as fin, open(mb_userpath / f"{fname}_GC_probes.csv", 'w') as fout:
-        next(fin)
-        reader = csv.reader(fin)
-        writer = csv.writer(fout, lineterminator='\n')
-        writer.writerow(["Base number", "%GC", "sscount", "Probe sequence", "Tm"])
-        for row in reader:
-            if int(row[1]) >30 and int(row[1])<56:
-                writer.writerow(row)
-
+    region_probes.to_csv(mb_userpath / f"{fname}_all_probes_sorted_ss.csv", index=False)
+    GC_probes.to_csv(mb_userpath / f"{fname}_GC_probes.csv", index=False)
 
     #sort by sscount?
-    flistsort = pd.read_csv(mb_userpath / f"{fname}_GC_probes.csv", sep=',', usecols=[0,1,2,3,4])
-
     #new file with only sequences of probes for calculating free energies using oligoscreen
-    flistsort2 = pd.read_csv(mb_userpath / f"{fname}_GC_probes.csv", usecols=[3], skiprows=1)
-    flistsort2.to_csv(mb_userpath / f"{fname}_oligoscreen_input.lis", index=False)
-
-    with open (mb_userpath / f"{fname}_GC_probes.csv", 'r') as GC_probes, open(mb_userpath / f"{fname}_all_probes_sorted_ss.csv", 'r') as all_probes:
-        no_GCprobes = sum(1 for row in GC_probes)
-        no_probes = sum(1 for row in all_probes)
+    GC_probes["Probe sequence"].to_csv(mb_userpath / f"{fname}_oligoscreen_input.lis", index=False, header=False)
 
     subprocess.check_output(["oligoscreen", mb_userpath / f"{fname}_oligoscreen_input.lis", mb_userpath / f"{fname}_oligoscreen_output.csv"])
     read_oligosc = pd.read_csv(mb_userpath / f"{fname}_oligoscreen_output.csv", delimiter = '\t', usecols=[1,2,3])
 
-    #os.remove(mb_userpath / f"{fname}_oligoscreen_input.lis")
-    os.remove(mb_userpath / f"{fname}_oligoscreen_output.csv")
-
     #keep only probes that meet the energy requirements and sort them
-    data_comb = pd.concat([flistsort, read_oligosc], axis=1)
+    data_comb = pd.concat([GC_probes, read_oligosc], axis=1)
     data_filter = data_comb[(data_comb.DGbimolecular > -7.5) & (data_comb.DGunimolecular > -2.5)]
-    for row in data_filter:
-        data_sort = data_filter.sort_values(['sscount','DGunimolecular', 'DGbimolecular', '%GC', 'DGduplex'], ascending=[False, False, False, False, True]) #sort descending by sscount = larger sscount more accessible target region
-        data_sort.to_csv(mb_userpath / f"{fname}_probes_sortedby5.csv", index=False)
+
+    data_sorted = data_filter.sort_values(['sscount','DGunimolecular', 'DGbimolecular', '%GC', 'DGduplex'], ascending=[False, False, False, False, True], ignore_index=True) #sort descending by sscount = larger sscount more accessible target region
+    data_sorted.to_csv(mb_userpath / f"{fname}_probes_sortedby5.csv", index=False)
 
     #determine the total number of probes that meet the eg criteria for the selected target (region or full)
-    with open(mb_userpath / f"{fname}_probes_sortedby5.csv", 'r') as flistsort3:
-        reader = csv.reader(flistsort3)
-        row_no = sum(1 for row in reader)-1
-        print("Maximum number of possible probes is: "+str(row_no)+"\n")
+    row_no = len(data_sorted)
 
-    try: #how many probes?
-        no_pb = int(input ('How many probes do you want to save? Enter the maximum number of probes if smaller than 50, or a number between 2 and 50: '))
+    if row_no==0:
+            print("No probes meet the criteria for the selected region, please expand the search region.")
+            exit('Try again!', mb_userpath)
 
-    except:
-        print('You must type a number between 2 and 50!')
-        sys.exit('Try again!')
+    no_pb = arguments.probe_count_max or input_int_in_range(min=probesToSaveMin, max=probesToSaveMax + 1,
+                                           msg=f"How many probes do you want to save? Enter the maximum number of probes if smaller than {probesToSaveMax}, or a number between {probesToSaveMin} and {probesToSaveMax}: ",
+                                           fail_message=f'You must type a number between {probesToSaveMin} and {probesToSaveMax}, try again: ')
 
-    else:
-        no_pb = numberProbes(no_pb)
+    no_pb, DG_probes = get_DG_probes(no_pb, data_sorted, should_print(arguments, True))
 
-    read1 = pd.read_csv(mb_userpath / f"{fname}_DG_probes.csv", delimiter = ',', usecols=[3], skiprows=1)
-    read1.to_csv(mb_userpath / f"{fname}_probes_forblast.csv", index=False)
+    read1 = DG_probes["Probe sequence"]
+    read1.to_csv(mb_userpath / f"{fname}_probes_forblast.csv", index=False, header=False)
 
     #write the fasta file containing the final sequences for blast
-    with open(mb_userpath / f"{fname}_probes_forblast.csv", 'r') as file, open(mb_userpath / f"{fname}_blast_picks.fasta",'w') as f1:
-        for line in file:
-            f1.write('>'+'\n'+ line)
+    with open(mb_userpath / f"{fname}_blast_picks.fasta",'w') as f1:
+        output_str = ">\n" + "\n>\n".join(DG_probes["Probe sequence"])
+        f1.write(output_str)
 
-    blastm = input('Do you want to use blast alignment information to determine cross homology? y/n: ')
+    blastm = arguments.blast or arguments.no_blast or input('Do you want to use blast alignment information to determine cross homology? y/n: ')
+
     if blastm == 'n':
         with open (mb_userpath / f"{fname}_DG_probes.csv") as f3:
             next(f3)
@@ -509,11 +399,9 @@ if __name__ == "__main__":
                 writer.writerow(row)
         mb_pick = pd.read_csv(mb_userpath / f"{fname}_blast_results_picks.csv", sep=',', usecols=[0,1])
         mb_pick.to_csv(mb_userpath / f"{fname}_mb_picks.csv", index=False, header = False)
-        
-        os.remove(mb_userpath / f"{fname}_probes_forblast.csv")
 
     elif blastm == 'y':
-        pick, query1, str2, str4 = blastChoice(blastm)
+        pick, query1, str2, str4 = blastChoice(blastm, arguments.blast_file)
         assert pick == no_pb, "The number of queries does not match the number of probes, wrong XML file?" #check if the correct file was used for blast
         assert query1[0] == str2, "The first query is not the same as the first sequence in the blast_picks.fasta file" #check if the correct file was used for blast
         assert query1[-1] in str4, "The last query is not contained in the last sequence in the blast_picks.fasta file" #check if the correct file was used for blast
@@ -553,10 +441,6 @@ if __name__ == "__main__":
                     cl[col].append(row[col])
         probe_seq = cl[0]
 
-        os.remove(mb_userpath / f"{fname}_top_mb_picks.csv")
-        os.remove(mb_userpath / f"{fname}_probes_forblast.csv")
-        os.remove(mb_userpath / f"{fname}_blast_results.csv")
-
         with open (mb_userpath / f"{fname}_blast_results_picks.csv", 'w') as output2:
             writer = csv.writer(output2)
             writer.writerow(["Pick#", "Base Number","Positives","Probe Sequence", "ss-count fraction"])
@@ -576,6 +460,7 @@ if __name__ == "__main__":
     for x in range(1, int(i)+1):
         subprocess.check_output(["fold", mb_userpath / f"{fname}_{str(x)}.seq" , mb_userpath / f"{fname}_{str(x)}.ct"])
         subprocess.check_output(["draw", mb_userpath / f"{fname}_{str(x)}.ct", mb_userpath / f"{fname}_{str(x)}.svg", '--svg', '-n', '1'])
+
     for j in range(1, int(i)+1):     #remove results that are highly structured
         with open (mb_userpath / f"{fname}_{str(j)}.ct", 'r') as gin:
             linesa = gin.readlines()
@@ -592,20 +477,22 @@ if __name__ == "__main__":
         os.remove(mb_userpath / f"{fname}_{str(j)}.seq")
         os.remove(mb_userpath / f"{fname}_{str(j)}.ct")
 
-    read_sscnt = pd.read_csv(mb_userpath / f"{fname}_all_probes_sorted_ss.csv", delimiter = ',')
+    read_sscnt = region_probes
     no_ss = (read_sscnt["sscount"] > 0.5).sum()
     
     with open (mb_userpath / f"{fname}_Final_molecular_beacons.csv", 'a') as add_output:
-        add_output.write('Results for ' + '\"'+filein +'\"'+ ' using ' + str(probe) + ' as probe length, '+'\n'+'for '+ str(no_pb) + ' probes, and blast choice = '+blastm+ ', and for a target region between ' + 
+
+        add_output.write('Results for ' + '\"'+filein +'\"'+ ' using ' + str(probe) + ' as probe length, '+'\n'+'for '+ str(no_pb) + ' probes, and blast choice = '+blastm+ ', and for a target region between ' +
         str(tg_start) +' and ' + str(tg_end) + ' nucleotides:  ' + '\n' +
-        '\t'+'1. Total number of possible probes =  ' + str(no_probes-1)+ '\n'+
-        '\t'+'2. Number of probes that have a GC content between 30% and 56% =  '+ str(no_GCprobes-1)+ '\n' +
+        '\t'+'1. Total number of possible probes =  ' + str(len(region_probes))+ '\n'+
+        '\t'+'2. Number of probes that have a GC content between 30% and 56% =  '+ str(len(GC_probes))+ '\n' +
         '\t'+'3. Number of probes that meet GC and energetic criteria =  ' + str(row_no) + '\n'
         '\t'+'4. Number of probes that have an ss-count fraction larger than 0.5 =  ' + str(no_ss)+ '\n')
-    print('Results for ' + '\"'+filein +'\"'+ ' using ' + str(probe) + ' as probe length, '+'\n'+'for '+ str(no_pb) + ' probes, and blast choice = '+blastm+ ', and for a target region between ' + 
+
+    print('Results for ' + '\"'+filein +'\"'+ ' using ' + str(probe) + ' as probe length, '+'\n'+'for '+ str(no_pb) + ' probes, and blast choice = '+blastm+ ', and for a target region between ' +
         str(tg_start) +' and ' + str(tg_end) + ' nucleotides:  ' + '\n')
-    print('\t'+'1. Total number of possible probes =  ' + str(no_probes-1)+ '\n')
-    print('\t'+'2. Number of probes that have a GC content between 30 and 56 =  '+ str(no_GCprobes-1)+ '\n')
+    print('\t'+'1. Total number of possible probes =  ' + str(len(region_probes))+ '\n')
+    print('\t'+'2. Number of probes that have a GC content between 30 and 56 =  '+ str(len(GC_probes))+ '\n')
     print('\t'+'3. Number of probes that meet GC and energetic criteria =  ' + str(row_no) + '\n' )
     print('\t'+'4. Number of probes that have an ss-count fraction larger than 0.5 =  ' + str(no_ss)+ '\n')
 
@@ -614,11 +501,4 @@ if __name__ == "__main__":
     print("\n"+"If no SVG files are found, increase the number of probes and/or target region!")
     #remove intermediate files
 
-    os.remove(mb_userpath / f"{fname}_mb_picks.csv")
-    os.remove(mb_userpath / f"{fname}_blast_results_picks.csv")
-    os.remove(mb_userpath / f"{fname}_all_probes_sorted_ss.csv")
-    os.remove(mb_userpath / f"{fname}_base_file.csv")
-    os.remove(mb_userpath / f"{fname}_base_grouped.csv")
-    os.remove(mb_userpath / f"{fname}_new_input.txt")
-    os.remove(mb_userpath / f"{fname}_sscount1.csv")
-    os.remove(mb_userpath / f"{fname}_three_col.csv")
+    if not arguments.keep_files: clean_files(mb_userpath)
