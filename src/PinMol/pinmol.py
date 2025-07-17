@@ -104,7 +104,7 @@ def regionTarget(arguments: argparse.Namespace) -> tuple[DataFrame, int, int]:
     df = pd.read_csv(mb_userpath / f"{fname}_all_probes.csv") #change
     tgstart = tg_start - 1
     tgend = tg_end - probe + 2
-    slice2 = df[tgstart:tgend].sort_values(by='sscount', ascending=False, ignore_index=True) #sort descending by sscount = larger sscount more accessible target region
+    slice2 = df[tgstart:tgend].sort_values(by='sscount', ascending=False, ignore_index=True, kind="stable") #sort descending by sscount = larger sscount more accessible target region
     return slice2, tg_start, tg_end
 
 def get_DG_probes(no_pb: int, data_sorted: DataFrame, should_print: bool=False) -> tuple[int, DataFrame]:  #how many probes should be retained; limited to range [2, 50]
@@ -353,7 +353,7 @@ if __name__ == "__main__":
     data_comb = pd.concat([GC_probes, read_oligosc], axis=1)
     data_filter = data_comb[(data_comb.DGbimolecular > -7.5) & (data_comb.DGunimolecular > -2.5)]
 
-    data_sorted = data_filter.sort_values(['sscount','DGunimolecular', 'DGbimolecular', '%GC', 'DGduplex'], ascending=[False, False, False, False, True], ignore_index=True) #sort descending by sscount = larger sscount more accessible target region
+    data_sorted = data_filter.sort_values(['sscount','DGunimolecular', 'DGbimolecular', '%GC', 'DGduplex'], ascending=[False, False, False, False, True], ignore_index=True,kind="stable") #sort descending by sscount = larger sscount more accessible target region
     data_sorted.to_csv(mb_userpath / f"{fname}_probes_sortedby5.csv", index=False)
 
     #determine the total number of probes that meet the eg criteria for the selected target (region or full)
@@ -450,7 +450,7 @@ if __name__ == "__main__":
 
         df = pd.read_csv(mb_userpath / f"{fname}_blast_results_picks.csv")
         for row in df:
-            df = df.sort_values(['Positives', 'Pick#'], ascending=[True, True])
+            df = df.sort_values(['Positives', 'Pick#'], ascending=[True, True],kind="stable")
             df.to_csv(mb_userpath / f"{fname}_Picks_Sorted.csv", index=False)
 
         mb_pick = pd.read_csv(mb_userpath / f"{fname}_Picks_Sorted.csv", sep=',', usecols=[1,3])
