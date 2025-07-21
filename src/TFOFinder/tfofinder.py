@@ -26,7 +26,7 @@ def validate_arguments(filein, probe_length: int, filename="") -> bool:
     return True
 
 #todo: add support for sscount csv
-def calculate_result(filein, probe_length: int, filename="", arguments = None) -> str:
+def calculate_result(filein, probe_length: int, filename="", arguments = None, output_dir = None) -> str:
     """
     Find TFO probes
     This method should be inside a with expression in order to close the given file
@@ -40,7 +40,8 @@ def calculate_result(filein, probe_length: int, filename="", arguments = None) -
     #todo: ask if can get rid of this and place before
     if should_print(arguments): print('Number of Structures = ' + str(structure_count) + ' \n\n...Please wait...\n')
 
-    sscount_df = getSSCountDF(ct_df, arguments and arguments.emit_sscount, output_file = mb_userpath / f"{fname}_sscount.csv")
+    sscount_df = getSSCountDF(ct_df, arguments and arguments.emit_sscount,
+                              output_file = output_dir / f"{fname}_sscount.csv" if output_dir else None)
     consec = get_consecutive_not_ss(probe_length, sscount_df)
     #todo: issue: what if they're not ever double-stranded in the same structure??
 
@@ -146,7 +147,7 @@ if __name__ == "__main__":
     
     #convert the ct file to a txt
     with open(filein,'r') as file:
-        tfo_probes_result = calculate_result(file, probe_length, filename = filein, arguments = arguments)
+        tfo_probes_result = calculate_result(file, probe_length, filename = filein, arguments = arguments, output_dir=mb_userpath)
 
     #todo: should it be add
     #todo: ask if should add extra newline at end (trivial issue)

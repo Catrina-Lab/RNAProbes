@@ -19,7 +19,7 @@ class Program:
         try:
             return self._run_program_raw(**kwargs)
         except Exception as e:
-            return Exception(f"{error_message}: {str(e)}")
+            raise Exception(f"{error_message}: {str(e)}") from e #todo: return
 
     def run(self, kwargs, validate_err_msg, runtime_err_msg):
         self._validate_args(kwargs, validate_err_msg)

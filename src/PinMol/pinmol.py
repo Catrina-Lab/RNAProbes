@@ -112,7 +112,6 @@ def get_GC_probes(sscount_df, probe_length, structure_count, arguments, program_
     (probes_df, result_obj.tg_start, result_obj.tg_end) = region_probes(sscount_df, probe_length, structure_count,
                                                                             arguments)
     GC_probes = probes_df[(probes_df["%GC"] < 56) & (probes_df["%GC"] > 30)]
-
     result_obj.region_probes = probes_df
     result_obj.len_GC_probes = len(GC_probes)
     probes_df.to_csv(program_object.save_buffer("[fname]_all_probes_sorted_ss.csv"), index=False)
@@ -222,7 +221,8 @@ def get_DG_probes(no_pb: int, GC_probes: DataFrame, read_oligosc: DataFrame,  pr
     return  DG_probes
 
 def get_data_sorted(GC_probes: DataFrame, read_oligosc: DataFrame, program_object: ProgramObject):
-    data_joined = pd.concat([GC_probes, read_oligosc], axis=1)
+    GC_probes_reset = GC_probes.reset_index(drop=True)
+    data_joined = pd.concat([GC_probes_reset, read_oligosc], axis=1)
     data_filter = data_joined[(data_joined.DGbimolecular > -7.5) & (data_joined.DGunimolecular > -2.5)]
 
     data_sorted = data_filter.sort_values(['sscount', 'DGunimolecular', 'DGbimolecular', '%GC', 'DGduplex'],
