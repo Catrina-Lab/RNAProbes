@@ -1,10 +1,10 @@
 {% extends 'base.html' %}
 
 {% block content %}
-<div id="form_container">
+<div id="form-container">
   {% include 'request-form.html' %}
 </div>
-<div id="response_container" class="container d-none">
+<div id="response-container" class="container d-none">
   <div class="text-center mb-5 text-header">
     <h1 class="display-5">Processing Your Requests</h1>
     <p class="lead text-muted">You can monitor the progress of each tool below.</p>
@@ -12,7 +12,8 @@
   <div class="row justify-content-center">
     <div class="col-lg-8">
       {% for program in programs %}
-        <div id="{{program}}-container">
+        <div id="{{program}}-response-container">
+          {% include 'request-failed.html' %}
           {% include 'request-received.html' %}
         </div>
       {% endfor %}
@@ -23,75 +24,114 @@
 
 {% block scripts %}
 <script>
-  document.addEventListener('DOMContentLoaded', () => {
-    const form = document.querySelector("form");
-    if (!form) return;
+  const form = document.querySelector("form");
 
-    const responseContainer = document.getElementById("response_container");
-    const formContainer = document.getElementById("form_container");
-    const programs = {{ programs | tojson }};
-    const resultUrls = {};
+  const responseContainer = document.getElementById("response-container");
+  const formContainer = document.getElementById("form-container");
+  const programs = {{ programs | tojson }};
+  const resultUrls = {};
 
-    form.addEventListener("submit", e => {
-      e.preventDefault();
-      formContainer.classList.add("d-none");
-      responseContainer.classList.remove("d-none");
-      sendRequests();
-    });
-
-    document.addEventListener('click', e => {
-      const downloadBtn = e.target.closest('[id$="-download-btn"]');
-      if (downloadBtn) {
-        const program = downloadBtn.id.split("-", 1)[0];
-        downloadFile(program);
-      }
-    });
-
-    function sendRequests() {
-      programs.forEach(sendRequest);
+  form.addEventListener("submit", e => {
+    e.preventDefault();
+    formContainer.classList.add("d-none");
+    responseContainer.classList.remove("d-none");
+    sendRequests();
+  });
+  const defaultEndBaseMin = {{1 + exports.PinMol.probeMin}};
+  const endBaseInput = form.querySelector("#pinmol-end-base");
+  const endBaseText = form.querySelector("#pinmol-end-base-text");
+  const startBaseInput = form.querySelector("#pinmol-start-base");
+  const pinmolProbeLengthInput = form.querySelector("#pinmol-probe-length");
+  form.addEventListener("input", e=>{
+    if(e.target.id == "pinmol-probe-length" || e.target.id == "pinmol-start-base"){
+      setProbeMin();
     }
+  });
 
-    async function sendRequest(program) {
-      const data = new FormData(form);
-      const response = await fetch(`/send-request?program=${program}`, {
-        method: "POST",
-        body: data,
-      });
+  function setProbeMin(){
+    if(pinmolProbeLengthInput.value != ""){
+        min = parseInt(pinmolProbeLengthInput.value) + (parseInt(startBaseInput.value) || 1);
+        //endBaseInput.setAttribute("min", min);
+        endBaseInput.min = min
+        endBaseInput.textContent = min;
+      } else {
+        endBaseInput.min = defaultEndBaseMin;
+        endBaseText.textContent = defaultEndBaseMin;
+      }
+  }
+
+  setProbeMin();
+  
+  document.addEventListener('click', e => {
+    const downloadBtn = e.target.closest('[id$="-download-btn"]');
+    if (downloadBtn) {
+      const program = downloadBtn.id.split("-", 1)[0];
+      downloadFile(program);
+    }
+  });
+
+  function sendRequests() {
+    programs.forEach(sendRequest);
+  }
+
+  async function sendRequest(program) {
+    const data = new FormData(form);
+    const response = await fetch(`/send-request?program=${program}`, {
+      method: "POST",
+      body: data,
+    });
+    if(response.status >= 400  && response.status < 600){
+      return handleError(program, response, await response.text())
+    } else {
       const responseJson = await response.json();
       renderResponse(responseJson, program);
     }
+  }
+  async function handleError(program, response, text){
+    renderFail(program, text);
+    if(response.status != 400) console.error(`Issue when submitting program ${program}: ${text}`);
+    return text
+  }
+  function renderFail(program, text){
+    programResponseContainer = document.getElementById(`${program}-response-container`);
+    programResponseContainer.querySelector(".request-recieved").classList.add("d-none");
+    programResponseContainer.querySelector(".request-failed").classList.remove("d-none");
+    programResponseContainer.querySelector(".failed-message").textContent = text;
+  }
 
-    function renderResponse(response, program) {
-      saveURL(response.zip, program);
-      renderTemplate(response.html, program);
-    }
+  function renderResponse(response, program) {
+    saveURL(response.zip, program);
+    renderSuccessTemplate(response.html, program);
+  }
 
-    function saveURL(zip, program) {
-      const zipFile = new Blob([base64ToUint8Array(zip)], { type: 'application/zip' });
-      resultUrls[program] = URL.createObjectURL(zipFile);
-    }
+  function saveURL(zip, program) {
+    const zipFile = new Blob([base64ToUint8Array(zip)], { type: 'application/zip' });
+    resultUrls[program] = URL.createObjectURL(zipFile);
+  }
 
-    function base64ToUint8Array(encoded) {
-      const binary = atob(encoded);
-      const bytes = new Uint8Array(binary.length);
-      for (let i = 0; i < bytes.length; i++) {
-        bytes[i] = binary.charCodeAt(i);
-      }
-      return bytes;
+  function base64ToUint8Array(encoded) {
+    const binary = atob(encoded);
+    const bytes = new Uint8Array(binary.length);
+    for (let i = 0; i < bytes.length; i++) {
+      bytes[i] = binary.charCodeAt(i);
     }
+    return bytes;
+  }
 
-    function renderTemplate(html, program) {
-      document.getElementById(`${program}-container`).innerHTML = html;
-    }
+  function renderSuccessTemplate(html, program) {
+    programResponseContainer = document.getElementById(`${program}-response-container`);
+    requestRecieved = programResponseContainer.querySelector(".request-recieved");
+    requestRecieved.classList.add("d-none");
+    requestRecieved.insertAdjacentHTML("beforebegin", html); //add before request recieved for easy request swapping
+  }
 
-    function downloadFile(program) {
-      const anchor = document.getElementById(`${program}-download-anchor`);
-      if (anchor && resultUrls[program]) {
-        anchor.href = resultUrls[program];
-        anchor.click();
-      }
+  function downloadFile(program) {
+    const anchor = document.getElementById(`${program}-download-anchor`);
+    if (anchor && resultUrls[program]) {
+      anchor.href = resultUrls[program];
+      anchor.click();
     }
-  });
+  }
 </script>
 {% endblock %}
 

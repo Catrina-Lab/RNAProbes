@@ -1,3 +1,4 @@
+import shlex
 import sys
 import os
 import pandas as pd
@@ -7,22 +8,20 @@ from Bio.Seq import Seq #don't think this is used even in the original
 from numpy.f2py.rules import arg_rules
 from pandas import DataFrame
 
-sys.path.append(str(Path(__file__).parent.parent))
-from util import input_int_in_range, range_type, path_string
-from RNAUtil import convert_ct_to_dataframe, getSSCountDF
+from src.util import input_int_in_range, range_type, path_string, validate_arg, validate_range_arg, parse_file_input
+from src.RNAUtil import CT_to_sscount_df
 
 probeMin = 4
 probeMax = 30
-match = ["ENERGY", "dG"] #find header rows in ct file
+exported_values = {"probeMin": probeMin, "probeMax": probeMax}
+
+
 base_complement = str.maketrans({'A': 'U', 'C': 'G', 'G': 'C', 'U': 'A'})
 
 
-def validate_arguments(filein, probe_length: int, filename="") -> bool:
-    if type(probe_length) is not int or not (probeMin <= probe_length <= probeMax):
-        raise TypeError(f"The given probe length must be a positive integer between {probeMin} and {probeMax}")
-    elif not parse_file_name(filename)[2] in [".ct", ".csv"]:
-        raise TypeError("The given file must have an extension of either .ct or .csv")
-
+def validate_arguments(probe_length: int, filename="", **ignore) -> bool:
+    validate_arg(parse_file_input(filename).suffix == ".ct", "The given file must be a valid .ct file")
+    validate_range_arg(probe_length, probeMin, probeMax + 1, "probe length")
     return True
 
 #todo: add support for sscount csv
@@ -36,25 +35,19 @@ def calculate_result(filein, probe_length: int, filename="", arguments = None, o
     :param arguments: a dictionary that controls printing during execution
     :return: str
     """
-    ct_df, structure_count = convert_ct_to_dataframe(filein)
-    #todo: ask if can get rid of this and place before
-    if should_print(arguments): print('Number of Structures = ' + str(structure_count) + ' \n\n...Please wait...\n')
-
-    sscount_df = getSSCountDF(ct_df, arguments and arguments.emit_sscount,
+    fname = parse_file_input(filename).stem
+    sscount_df, structure_count = CT_to_sscount_df(filein, arguments and arguments.emit_sscount,
                               output_file = output_dir / f"{fname}_sscount.csv" if output_dir else None)
+    #todo: ask if can get rid of this and place before
+
+    if should_print(arguments): print('Number of Structures = ' + str(structure_count) + ' \n\n...Please wait...\n')
     consec = get_consecutive_not_ss(probe_length, sscount_df)
     #todo: issue: what if they're not ever double-stranded in the same structure??
 
     return get_final_string(filename, probe_length, structure_count, consec, sscount_df)
 
-def parse_file_name(filein : str, output_dir = None):
-    filein_path = Path(filein).resolve()  # Convert the filein to a Path object and resolve its full path
-    mb_userpath = output_dir or filein_path.parent  # Use the parent directory of the input file to save all files
-    return mb_userpath, filein_path.stem, filein_path.suffix
-
 def should_print(arguments, is_content_verbose = False):
     return arguments and arguments.print and not arguments.quiet and (not is_content_verbose or arguments.verbose)
-
 
 def get_consecutive_not_ss(probe_length: int, sscount_df : DataFrame) -> DataFrame:
     # get the double stranded elements with bse A or G
@@ -102,8 +95,14 @@ def sequence_probe(baseno: int, probe_len: int, structure_count: int, sscount_df
     avg_sscount = probe_sscounts.sum() / (probe_len * structure_count)
     return (baseno, per, avg_sscount, complement, tml) #returns baseno so it can easily be written to file
 
+argument_parser = None
+def get_argument_parser():
+    global argument_parser
+    if argument_parser is None:
+        argument_parser = create_arg_parser()
+    return argument_parser
 
-def get_command_line_arguments(args):
+def create_arg_parser():
     import argparse, functools
     parser = argparse.ArgumentParser(
         prog='TDOFinder',
@@ -118,13 +117,15 @@ def get_command_line_arguments(args):
     parser.add_argument("-q", "--quiet", action="store_true")
     parser.add_argument("-w", "--overwrite", action="store_true",
                         help="Overwrite the returned TFO Probes file. Default is to append")
-
-    args = parser.parse_args(args)
-    args.print = True  # denotes that this is from the command line
+    return parser
+def get_command_line_arguments(args: str | list, from_command_line = True):
+    args = get_argument_parser().parse_args(args if isinstance(args, list) else shlex.split(args))
+    if from_command_line: args.print = True  # denotes that this is from the command line
     return args
 
-if __name__ == "__main__":
-    arguments = get_command_line_arguments(sys.argv[1:])
+
+def run(args, from_command_line = True):
+    arguments = get_command_line_arguments(args, from_command_line = from_command_line)
     if should_print(arguments):
         print("\n" * 5)
         print(" \x1B[3m TFOFinder\x1B[0m  Copyright (C) 2022  Irina E. Catrina\n"
@@ -133,28 +134,31 @@ if __name__ == "__main__":
               "under certain conditions; for details please read the GNU_GPL.txt file.\n\n"
               "Feel free to use the CLI or to run the program directly with command line arguments \n"
               "(view available arguments with --help).\n\n"
-    
+
               f"{'->' * 40}\n\n"
               "WARNING: Previous files will be overwritten or appended!  Save them in a\n"
               "different location than the current input file, or rename them.\n\n"
               f"{'->' * 40}")
-    
+
     filein = arguments.file or input('Enter the ct file path and name: ')
-    mb_userpath, fname, suffix = parse_file_name(filein, arguments.output_dir)
+    mb_userpath, fname, suffix = parse_file_input(filein, arguments.output_dir)
 
-    probe_length = arguments.probes or input_int_in_range(min = probeMin, max = probeMax + 1, msg = f"Enter the length of TFO probe; a number between {probeMin} and {probeMax} inclusive: ",
-                               fail_message = f'You must type a number between {probeMin} and {probeMax}, try again: ')
-    
-    #convert the ct file to a txt
-    with open(filein,'r') as file:
-        tfo_probes_result = calculate_result(file, probe_length, filename = filein, arguments = arguments, output_dir=mb_userpath)
+    probe_length = input_int_in_range(min=probeMin, max=probeMax + 1,
+                                      msg=f"Enter the length of TFO probe; a number between {probeMin} and {probeMax} inclusive: ",
+                                      fail_message=f'You must type a number between {probeMin} and {probeMax}, try again: ',
+                                      initial_value=arguments.probes, retry_if_fail=arguments.print)
 
-    #todo: should it be add
-    #todo: ask if should add extra newline at end (trivial issue)
+    # convert the ct file to a txt
+    with open(filein, 'r') as file:
+        tfo_probes_result = calculate_result(file, probe_length, filename=filein, arguments=arguments,
+                                             output_dir=mb_userpath)
+
+    # todo: should it be add
+    # todo: ask if should add extra newline at end (trivial issue)
     with open(mb_userpath / f"{fname}_TFO_probes.txt", "w" if arguments.overwrite else 'a') as file:
         file.write(tfo_probes_result)
 
-    if should_print(arguments, is_content_verbose = True):
+    if should_print(arguments, is_content_verbose=True):
         import textwrap
         print("Results: \n" + textwrap.indent(tfo_probes_result, " " * 4))
     if should_print(arguments):

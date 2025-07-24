@@ -1,7 +1,13 @@
-from pathlib import Path
+import io
+import zipfile
+from collections import namedtuple
 from collections.abc import Callable
+from pathlib import Path
 import argparse
 import os
+
+class ValidationError(Exception):
+    pass
 
 def input_int(msg : str, int_predicate = lambda n: True, fail_message : str = None, initial_value = None, retry_if_fail=False) -> int:
     fail_message = fail_message or "Please input an integer"
@@ -23,10 +29,41 @@ def input_int_in_range(min: int = None, max: int = None, msg : str = None, fail_
     return input_int(msg, initial_value=initial_value, int_predicate = lambda x: ((min is None or x >= min) and (max is None or x < max)) or extra_predicate(x),
                      fail_message = fail_message, retry_if_fail=retry_if_fail)
 
+def remove_files(*files):
+    for file in files:
+        remove_if_exists(file)
+
 def remove_if_exists(path: Path):
     if path.exists():
         os.remove(path)
 
+def validate_arg(boolean: bool, msg):
+    if not boolean: raise ValidationError(msg)
+
+def validate_range_arg(input: int, min = None, max = None, name = "input", overwrite_msg = None, extra_predicate = lambda x: False):
+    """
+    Validate an argument that conforms to a range
+    :param input:
+    :param min: the max value of the argument, exclusive
+    :param max:
+    :param msg:
+    :return:
+    """
+    validate_arg(type(input) is int, overwrite_msg or f"The given {name} is not an integer! It must be an integer between {min or "negative Infinity"} inclusive and {max or "Infinity"} exclusive")
+    min_OK = (min is None or input >= min)
+    max_OK = (max is None or input < max)
+    validate_arg((max_OK and min_OK) or extra_predicate(input), overwrite_msg or f"The given {name} ({input}) is {"too small" if max_OK else "too large"}! It must be an integer between {min or "negative Infinity"} inclusive and {max or "Infinity"} exclusive")
+
+def optional_argument(request, arg_name: str, cmd_line_name: str = None, default_value = None, type: Callable =None):
+    if cmd_line_name is not None:
+        if request.form[arg_name] != "":
+            return f" {cmd_line_name} {request.form[arg_name]}"
+        else:
+            return f" {cmd_line_name} {default_value}" if default_value is not None else ""
+    elif default_value is not None:
+        return default_value if request.form[arg_name] == "" else type(request.form[arg_name])
+    else:
+        raise ValueError("Must include either cmd_line_name or default_value (or both)")
 
 def get_or_none(obj, attr):
     return getattr(obj, attr, None)
@@ -52,50 +89,24 @@ def path_arg(string, suffix=".ct"):
     else:
         raise argparse.ArgumentTypeError(f'Invalid file given. File must be an existing {suffix} file')
 
-class ArgparseClassBuilder:
-    def __init__(self, parse, matches=lambda x: True, to_return=lambda x: x):
-        self.to_return = to_return
-        self.parse_msg = None
-        self.msg = ""
-        self.parse = parse
-        self.matches = matches
+def get_folder_as_zip(folder_path: Path) -> bytes:
+    zip_buffer = io.BytesIO()
+    with zipfile.ZipFile(zip_buffer, 'w', zipfile.ZIP_DEFLATED) as zipf:
+        for root, dirs, files in os.walk(folder_path):
+            for file in files:
+                abs_path = os.path.join(root, file)
+                rel_path = os.path.relpath(abs_path, start=folder_path)
+                zipf.write(abs_path, arcname=rel_path)
+    zip_buffer.seek(0)
+    return zip_buffer.getvalue()
 
-    def set_default_match_fail_msg(self, msg):
-        self.msg = msg
-        return self
-    
-    def set_default_parse_fail_msg(self, msg):
-        self.parse_msg = msg
-        return self
+ParsedFile = namedtuple("ParsedFile", ["parent", "stem", "suffix"])
+def parse_file_input(filein, output_dir = None) -> ParsedFile:
+    filein_path = Path(filein).resolve()  # Convert the filein to a Path object and resolve its full path
+    mb_userpath = output_dir or filein_path.parent  # Use the parent directory of the input file to save all files
+    fname = filein_path.stem
+    return ParsedFile(mb_userpath, fname, filein_path.suffix)
 
-    def _parse_msg(self, msg, *args, **kwargs):
-        if type(msg) == str:
-            return msg
-        elif type(msg) == Callable: #fails for now
-            return msg(*args, **kwargs)
-        else:
-            raise TypeError("Incompatible message type. Only allowed strings or functions, given " + str(type(msg)))
-
-
-    def __call__(self, *args, err_msg=None, parse_msg=None, **kwargs):
-        def instance_class(*cmdline_args):
-            try:
-                to_check = self.parse(*cmdline_args)
-                if self.matches(to_check, *args, **kwargs):  # in returns true if string ==
-                    return self.to_return(to_check)
-                else:
-                    raise argparse.ArgumentTypeError(self._parse_msg(err_msg or self.msg, *args, **kwargs))
-            except argparse.ArgumentTypeError:
-                raise
-            except Exception as e:
-                raise argparse.ArgumentTypeError(self._parse_msg(parse_msg or self.parse_msg, *args, **kwargs), e)
-        return instance_class
-
-range_class = (ArgparseClassBuilder(int, lambda n, min=0, max=100: min <= n <= max)
-               .set_default_match_fail_msg(lambda min=0, max=100:f"Must be between {min} and {max}")
-               .set_default_parse_fail_msg(lambda min=0, max=100:f"Must be a valid integer between {min} and {max}"))
-fiveToTen = range_class(min=5, max = 10)
 
 if __name__ == "__main__":
-    import sys
-    fiveToTen(6)
+    print("Debug")

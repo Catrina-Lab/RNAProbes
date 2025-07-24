@@ -26,8 +26,8 @@
             <h3 class="fs-4"><i class="fas fa-bullseye me-2"></i>TFOFinder Options</h3>
             <div class="mb-3">
               <label for="tfofinder-probe-length" class="form-label">Probe Length</label>
-              <input type="number" class="form-control" id="tfofinder-probe-length" name="tfofinder-probe-length" min="4" max="30" placeholder="e.g., 15" required>
-              <div class="form-text">Choose a number between 4 and 30.</div>
+              <input type="number" class="form-control" id="tfofinder-probe-length" name="tfofinder-probe-length" min="{{exports.TFOFinder.probeMin}}" max="{{exports.TFOFinder.probeMax}}" placeholder="e.g., 9" required>
+              <div class="form-text">Choose a number between {{exports.TFOFinder.probeMin}} and {{exports.TFOFinder.probeMax}}.</div>
             </div>
           </div>
           {% endif %}
@@ -37,18 +37,26 @@
             <h3 class="fs-4"><i class="fas fa-map-pin me-2"></i>PinMol Options</h3>
             <div class="mb-3">
               <label for="pinmol-probe-length" class="form-label">Probe Length</label>
-              <input type="number" class="form-control" id="pinmol-probe-length" name="pinmol-probe-length" min="18" max="26" placeholder="e.g., 22" required>
-              <div class="form-text">Choose a number between 18 and 26.</div>
+              <input type="number" class="form-control" id="pinmol-probe-length" name="pinmol-probe-length" min="{{exports.PinMol.probeMin}}" max="{{exports.PinMol.probeMax}}" placeholder="e.g., 20" required>
+              <div class="form-text">Choose a number between {{exports.PinMol.probeMin}} and {{exports.PinMol.probeMax}}.</div>
+            </div>
+            <div class="mb-3">
+              <label for="pinmol-probe-count-max" class="form-label">Maximum saved probes (Optional)</label>
+              <input type="number" class="form-control" id="pinmol-probe-count-max" name="pinmol-probe-count-max" min="{{exports.PinMol.probesToSaveMin}}" max="{{exports.PinMol.probesToSaveMax}}" placeholder="Default {{exports.PinMol.probesToSaveMax}}">
+              <div class="form-text">Choose a number between {{exports.PinMol.probesToSaveMin}} and {{exports.PinMol.probesToSaveMax}}.</div>
             </div>
             <div class="row">
               <div class="col-md-6 mb-3">
                 <label for="pinmol-start-base" class="form-label">Start Base (Optional)</label>
-                <input type="number" class="form-control" id="pinmol-start-base" name="pinmol-start-base" placeholder="Default: 1">
+                <input type="number" class="form-control" id="pinmol-start-base" name="pinmol-start-base" min="1" placeholder="Default: 1">
+                <div class="form-text">Choose a number greater than 1.</div>
               </div>
               <div class="col-md-6 mb-3">
                 <label for="pinmol-end-base" class="form-label">End Base (Optional)</label>
                 <input type="number" class="form-control" id="pinmol-end-base" name="pinmol-end-base" placeholder="Default: end">
+                <div class="form-text">Choose a number greater than <span id="pinmol-end-base-text"></span>.</div>
               </div>
+              <div class="form-text">The maximum value for both start and end base is your CT file's maximum base</div>
             </div>
           </div>
           {% endif %}

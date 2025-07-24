@@ -1,5 +1,6 @@
 import os, sys
 from argparse import Namespace
+import shlex
 
 import pandas as pd
 import subprocess
@@ -9,14 +10,22 @@ from pathlib import Path
 # import RNAstructure
 from pandas import DataFrame
 
-sys.path.append(str(Path(__file__).parent.parent))
-from util import range_type, path_string, path_arg
+from src.util import range_type, path_string, path_arg
+undscr = ("->" * 40) + "\n"
+copyright_msg = (f'{"\n" * 6}'
+          f'smFISH_HybEff program  Copyright (C) 2022  Irina E. Catrina\n' +
+          'This program comes with ABSOLUTELY NO WARRANTY;\n' +
+          'This is free software, and you are welcome to redistribute it\n' +
+          'under certain conditions; for details please read the GNU_GPL.txt file.\n' +
+          undscr +
+          "\nWARNING: Previous files will be overwritten or appended!\n" +
+          undscr)
 
 def validate_arguments(filein, arguments: dict={"intermolecular": False}):
     return parse_file_name(filein)[2] == ".ct" and arguments.get("intermolecular") is not None #other arguments are fine as long as intermolecular exists
 
-def calculate_result(filein, arguments:dict={"intermolecular": False}):
-    output_dir, fname, df_filtered = process_ct_file(ct_filein, arguments)
+def calculate_result(filein, arguments: dict={"intermolecular": False}):
+    output_dir, fname, df_filtered = process_ct_file(filein, arguments)
     return get_result(arguments, output_dir, fname, df_filtered)
 
 def get_result(arguments, output_dir, fname, df_filtered):
@@ -31,13 +40,13 @@ def get_result(arguments, output_dir, fname, df_filtered):
         result.append(output_dir / f"{fname}filtered_file.csv")
     if arguments.get("keep_files"): clean_output(arguments.get("intermolecular"), output_dir, fname)
 
-    return tuple(*result)
+    return tuple(result)
 
 def clean_output(intermolecular, output_dir, fname):
     os.remove(output_dir / f"{fname}.txt")
     os.remove(output_dir / f"{fname}.csv")
     os.remove(output_dir / f"{fname}2.csv")
-    if arguments.get("intermolecular"):
+    if intermolecular:
         os.remove(output_dir / f"{fname}pairs.out")
         os.remove(output_dir / f"{fname}pairs.txt")
 
@@ -105,12 +114,13 @@ def process_ct_file(filein, arguments: dict):
     output_path = output_dir / f"{fname}.txt"
     subprocess.check_output(["OligoWalk", filein, str(output_path), '--structure', '-d', '-l', '20', '-c', '0.25uM', '-m', '1', '-s', '3'])
 
-    with open(output_dir / f"{fname}.txt", 'r+') as fp:
+    with open(output_path, 'r+') as fp:
         lines = fp.readlines()  # read and store all lines into list
         fp.seek(0)  # move file pointer to the beginning of a file
         fp.truncate()  # truncate the file
         fp.writelines(lines[20:])  # start writing lines except the first 20 lines; lines[1:] from line 21 to last line
-    df = pd.read_csv(output_dir / f"{fname}.txt", sep='\t')
+
+    df = pd.read_csv(output_path, sep='\t')
     df.to_csv(output_dir / f"{fname}.csv", sep=',', index=None)
     df2 = pd.read_csv(output_dir / f"{fname}.csv")
     df2['dG1FA'], df2['dG2FA'], df2['dG3FA'] = df2['Duplex (kcal/mol)'] + 0.2597 * 10, df2[
@@ -180,8 +190,13 @@ def process_list_file(output_dir, fname, oligos):
         for i in range(len(energy_values)):
             f.write(f"{sequences[i].split()[0]},{sequences[i].split()[1]},{energy_values[i]}\n")
 
-
-def get_command_line_arguments(args):
+argument_parser = None
+def get_argument_parser():
+    global argument_parser
+    if argument_parser is None:
+        argument_parser = create_arg_parser()
+    return argument_parser
+def create_arg_parser():
     import argparse, functools
     parser = argparse.ArgumentParser(
         prog='smFISH',
@@ -192,29 +207,25 @@ def get_command_line_arguments(args):
     parser.add_argument("-q", "--quiet", action="store_true")
     parser.add_argument("-i", "--intermolecular", action="store_true")
     parser.add_argument("-k", "--keep-files", action="store_true")
-    args = parser.parse_args(args)
-    args.print = True  # denotes that this is from the command line
+    return parser
+
+def get_command_line_arguments(args: str | list, from_command_line = True) -> Namespace:
+    args = get_argument_parser().parse_args(args if isinstance(args, list) else shlex.split(args))
+    if from_command_line: args.print = True  # denotes that this is from the command line
     return args
 
+def should_print(arguments, is_content_verbose = False):
+    return arguments and arguments.print and not arguments.quiet and (not is_content_verbose or arguments.verbose)
 
-if __name__ == "__main__":
-    undscr = ("->" * 40) + "\n"
-    print(f'{"\n" * 6}'
-          f'smFISH_HybEff program  Copyright (C) 2022  Irina E. Catrina\n' +
-          'This program comes with ABSOLUTELY NO WARRANTY;\n' +
-          'This is free software, and you are welcome to redistribute it\n' +
-          'under certain conditions; for details please read the GNU_GPL.txt file.\n' +
-          undscr +
-          "\nWARNING: Previous files will be overwritten or appended!\n" +
-          undscr)
+def run(args, from_command_line = True):
+    arguments = get_command_line_arguments(args, from_command_line=from_command_line)
+    if should_print(arguments): print(copyright_msg)
 
-    arguments = get_command_line_arguments(sys.argv[1:])
     ct_filein = arguments.file or input('Enter the ct file path and name: ')
     calculate_result(ct_filein, vars(arguments))
 
     if arguments.intermolecular:
         #no filtered_file??
-
         print("Check the *final_filtered_file.csv for proposed smFISH probes. However, if not enough probes have been"
               +" selected given the initial selection criteria or only the CDS is targeted, please review the *filtered_file.csv and *3.csv to "
               +"select additional probes. Moreover, the intermolecular interactions of the probes should be taken into acocunt. Please review the *combined_output.csv file, and eliminate any probes with "
