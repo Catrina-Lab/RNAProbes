@@ -1,4 +1,7 @@
+# A collection of utility methods and classes that can be useful in other projects as well
+
 import io
+import shutil
 import zipfile
 from collections import namedtuple
 from collections.abc import Callable
@@ -9,16 +12,53 @@ import os
 class ValidationError(Exception):
     pass
 
-def input_int(msg : str, int_predicate = lambda n: True, fail_message : str = None, initial_value = None, retry_if_fail=False) -> int:
+class DiscontinuousRange:
+    def __init__(self, *items: int | range, range_str: str = None, min_value: int = None, max_value: int = None):
+        """
+            Creates a discontinous range generator. Items are given in the order that they are inputted into the range. Use either *items or range_str
+            :param items: a collection of elements to turn into a range
+            :param range_str: a string composed of elements separated by commas. The elements can be integers or ranges (denoted with a -, end is INCLUSIVE)
+            :param min_value: for user-input, the minimum allowed value in the DiscontinuousRange
+            :param max_value: for user-input, the maximum allowed value in the DiscontinuousRange (exclusive)
+            :return:
+        """
+        if len(items) == 0: items = range_str.replace(" ", "").split(',')
+        self.items = [self._get_and_verify(item, min_value=min_value, max_value=max_value) for item in items]
+
+    @staticmethod
+    def _get_and_verify(item: str | int | range, min_value: int = None, max_value: int = None):
+        range_obj = _get_range(item)
+        first_elem, last_elem = (range_obj.start, range_obj.stop - 1) if range_obj.step > 0 else (range_obj.stop + 1, range_obj.start)
+        if is_not_below_min(min_value, first_elem) and is_below_max(max_value, last_elem):
+            return range_obj
+        raise ValueError(f"Range {range_obj} is not between {min_value or "negative infinity"} inclusive and {max_value or "infinity"} exclusive")
+
+    @staticmethod
+    def template(min_value = None, max_value = None, input_string = True):
+        if input_string: return lambda x: DiscontinuousRange(range_str=x, min_value=min_value, max_value=max_value)
+        return lambda *x: DiscontinuousRange(*x, min_value=min_value, max_value=max_value)
+
+    def __iter__(self):
+        return (i for item in self.items for i in item)
+
+    def __reversed__(self):
+        return (i for item in reversed(self.items) for i in reversed(item))
+    def __str__(self):
+        return ", ".join([(str(range.start) if range.start == range.stop-1 else f"{range.start}-{range.stop - 1}") for range in self.items])
+
+    def __repr__(self):
+        return f"DiscontinuousRange({str(self)})"
+
+def input_value(msg : str, mapper: type[any] = int, predicate = lambda n: True, fail_message : str = None, initial_value = None, retry_if_fail=False):
     fail_message = fail_message or "Please input an integer"
     while True:
         try:
-            x = initial_value or int(input(msg))
+            x = initial_value or mapper(input(msg))
             initial_value = None
-            if not int_predicate(x):
+            if not predicate(x):
                 raise ValueError()
             return x
-        except (ValueError, EOFError) as e:
+        except (ValueError, EOFError, TypeError) as e:
             if retry_if_fail: print(fail_message)
             else: raise ValueError(fail_message) from e
 
@@ -26,8 +66,15 @@ def input_int_in_range(min: int = None, max: int = None, msg : str = None, fail_
                        initial_value = None, extra_predicate=lambda x: False, retry_if_fail=False) -> int:
     fail_message = fail_message or f"Please input an integer between {min} (inclusive) and {max} (exclusive)."
     msg = msg or f"Input an integer between {min} (inclusive) and {max} (exclusive): "
-    return input_int(msg, initial_value=initial_value, int_predicate = lambda x: ((min is None or x >= min) and (max is None or x < max)) or extra_predicate(x),
-                     fail_message = fail_message, retry_if_fail=retry_if_fail)
+    return input_value(msg, initial_value=initial_value, predicate = lambda x: ((min is None or x >= min) and (max is None or x < max)) or extra_predicate(x),
+                       fail_message = fail_message, retry_if_fail=retry_if_fail)
+
+def input_range(min: int = None, max: int = None, msg : str = None, fail_message : str = None,
+                       initial_value = None, retry_if_fail=False) -> DiscontinuousRange:
+    fail_message = fail_message or f"Please input a range contained between {min} (inclusive) and {max} (exclusive)."
+    msg = msg or f"Input a range contained between {min} (inclusive) and {max} (exclusive): "
+    return input_value(msg, mapper=DiscontinuousRange.template(min_value=min, max_value=max), initial_value=initial_value,
+                       fail_message = fail_message, retry_if_fail=retry_if_fail)
 
 def remove_files(*files):
     for file in files:
@@ -36,6 +83,12 @@ def remove_files(*files):
 def remove_if_exists(path: Path):
     if path.exists():
         os.remove(path)
+
+def validate_doesnt_throw(func: Callable, *input, msg="", **kwargs):
+    try:
+        return func(*input, **kwargs)
+    except Exception as e:
+        raise ValidationError(msg) from e
 
 def validate_arg(boolean: bool, msg):
     if not boolean: raise ValidationError(msg)
@@ -50,9 +103,15 @@ def validate_range_arg(input: int, min = None, max = None, name = "input", overw
     :return:
     """
     validate_arg(type(input) is int, overwrite_msg or f"The given {name} is not an integer! It must be an integer between {min or "negative Infinity"} inclusive and {max or "Infinity"} exclusive")
-    min_OK = (min is None or input >= min)
-    max_OK = (max is None or input < max)
+    min_OK = is_not_below_min(min, input)
+    max_OK = is_below_max(max, input)
     validate_arg((max_OK and min_OK) or extra_predicate(input), overwrite_msg or f"The given {name} ({input}) is {"too small" if max_OK else "too large"}! It must be an integer between {min or "negative Infinity"} inclusive and {max or "Infinity"} exclusive")
+
+def is_not_below_min(min, *values):
+    return all(min is None or value >= min for value in values)
+
+def is_below_max(max, *values):
+    return all(max is None or value < max for value in values)
 
 def optional_argument(request, arg_name: str, cmd_line_name: str = None, default_value = None, type: Callable =None):
     if cmd_line_name is not None:
@@ -67,13 +126,14 @@ def optional_argument(request, arg_name: str, cmd_line_name: str = None, default
 
 def get_or_none(obj, attr):
     return getattr(obj, attr, None)
-def range_type(string, min=0, max=1000):
+
+def bounded_int(string, min=None, max=None):
        value = int(string)
-       if min <= value <= max:
+       if is_not_below_min(min, value) and is_below_max(max + 1, value):
            return value
        else:
            raise argparse.ArgumentTypeError(
-               f'value not in range {min}-{max}. Please either keep it in range or leave it out.')
+               f'Value not in range {min or "-∞"}-{max or "∞"}. Please either keep it in range or leave it out.')
 
 def path_string(string, suffix=".ct"):
     path = Path(string).resolve()
@@ -106,6 +166,20 @@ def parse_file_input(filein, output_dir = None) -> ParsedFile:
     mb_userpath = output_dir or filein_path.parent  # Use the parent directory of the input file to save all files
     fname = filein_path.stem
     return ParsedFile(mb_userpath, fname, filein_path.suffix)
+
+def safe_remove_tree(folder: Path, root_dir): #just to be really safe when removing files
+    if root_dir in folder.parents:
+        if folder.exists(): shutil.rmtree(folder)
+    else:
+        raise ValueError(f"The given folder {folder} is not a child of root folder {root_dir}")
+
+def _get_range(item: str | range | int) -> range:
+    if isinstance(item, range): return item
+    if isinstance(item, int): return range(item, item+1)
+
+    pair = item.split('-')  # may only be one item, but that's OK
+    return range(int(pair[0]), int(pair[-1])+1)
+
 
 
 if __name__ == "__main__":

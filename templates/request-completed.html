@@ -3,7 +3,7 @@
     <h5 class="card-title text-success"><i class="fas fa-check-circle me-2"></i>{{ program }}</h5>
     <p class="card-text">Your results for {{ program }} are now ready!</p>
     <div class="d-flex justify-content-end">
-      <button class="btn btn-outline-primary me-2" type="button">View Results</button>
+      <button class="btn btn-outline-primary me-2 d-none" type="button">View Results</button>
       <button id="{{program}}-download-btn" class="btn btn-primary" type="button">
         <i class="fas fa-download me-2"></i>Download
         <a id="{{program}}-download-anchor" class="d-none" download="{{filename}}" target="_blank"></a>

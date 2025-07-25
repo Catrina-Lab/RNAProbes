@@ -1,5 +1,6 @@
+#python version >=3.9
+
 import os
-import shutil
 import uuid
 from collections.abc import Callable
 
@@ -8,9 +9,10 @@ from sys import argv
 
 from pydantic import UUID4
 
+from src.RNASuiteUtil import ProgramObject
 from src.TFOFinder import tfofinder
 from src.PinMol import pinmol
-from src.util import optional_argument, get_folder_as_zip, ValidationError
+from src.util import optional_argument, get_folder_as_zip, ValidationError, safe_remove_tree
 from werkzeug.utils import secure_filename
 from functools import partial
 import time, io, zipfile, base64
@@ -32,11 +34,16 @@ def send_error_response(error: Exception, **kwargs):
 
 
 class Program:
-    #todo: proper error handling for failure
+    def _get_args(self, request, job_id, error_message="Something went wrong"):
+        try:
+            return self._get_args_raw(request, job_id)
+        except Exception as e:
+            raise ValidationError(f"{error_message}: {str(e)}") from e
+
     def _validate_args(self, kwargs, error_message="Something went wrong"):
         try:
-            return self._validate_args_raw(**kwargs)
-        except TypeError as e:
+            return self._validate_args_raw(**kwargs) or dict()
+        except Exception as e:
             raise ValidationError(f"{error_message}: {str(e)}") from e
 
     def _run_program(self, kwargs, error_message="Something went wrong", validate_err_msg=None):
@@ -49,15 +56,16 @@ class Program:
 
     def run(self, kwargs, validate_err_msg, runtime_err_msg):
         try:
-            self._validate_args(kwargs, validate_err_msg)
-            result = self._run_program(kwargs, runtime_err_msg, validate_err_msg=validate_err_msg)
-            return self._get_response(result, **kwargs)
+            kwargs = self._get_args(request, uuid.uuid4())
+            modified_kwargs = self._validate_args(kwargs, validate_err_msg)
+            result = self._run_program(kwargs | modified_kwargs, runtime_err_msg, validate_err_msg=validate_err_msg)
+            return self._get_response(result)
         except Exception as e:
             return send_error_response(e, **kwargs)
         finally:
             if self._run_finally is not None: self._run_finally(**kwargs)
 
-    def __init__ (self, get_args: Callable, validate_args: Callable, run_program: Callable, get_response: Callable, run_finally: Callable = None):
+    def __init__ (self, name, get_args: Callable, validate_args: Callable, run_program: Callable, get_response = None, run_finally: Callable = None):
         """
         Create a Program object
         :param get_args: Get all the args needed for validating and running the program. If some are not needed in validate or run_program,
@@ -67,11 +75,18 @@ class Program:
         :param get_response: create a valid flask response from the program's response
         :param run_finally: an optional argument to run any needed cleanup after running the program (e.g. file deletion)
         """
-        self.get_args = get_args
+        self.name = name
+        self._get_args_raw = get_args
         self._validate_args_raw = validate_args
         self._run_program_raw = run_program
-        self._get_response = get_response
         self._run_finally = run_finally
+        self._get_response = get_response or self._get_response_default #temporary, while there still are temp methods
+
+    def _get_response_default(self, result: ProgramObject, **kwargs):
+        zip_bytes, zipfile_name = result.to_zip(f"{self.name}ResultsFor-[fname].zip")
+        zip_file_encoded = base64.b64encode(zip_bytes).decode("utf-8")
+        return jsonify(zip=zip_file_encoded, html=render_template(
+            'request-completed.html', program=self.name, filename=zipfile_name))
 
 def close_file(func, *, file_arg_name = "filein", **kwargs):
     """
@@ -94,12 +109,6 @@ def delete_folder_tree(dir_arg_name = "output_dir", root_dir: Path = root, **kwa
     """
     safe_remove_tree(kwargs[dir_arg_name], root_dir)
 
-def safe_remove_tree(folder: Path, root_dir = root): #just to be really safe when removing files
-    if root_dir in folder.parents:
-        if folder.exists(): shutil.rmtree(folder)
-    else:
-        raise ValueError(f"The given folder {folder} is not a child of root folder {root}")
-
 def get_zip_bytes(filename, **kwargs) -> bytes:
     file_obj = io.BytesIO()
     with zipfile.ZipFile(file_obj, 'w', compression=zipfile.ZIP_DEFLATED) as zip_file:
@@ -111,23 +120,7 @@ def get_zip_bytes(filename, **kwargs) -> bytes:
     file_obj.seek(0)
     return file_obj.getvalue()
 
-def get_tfofinder_result(result, **kwargs):
-    file_stem = Path(kwargs["filename"]).stem
-    zip_bytes = get_zip_bytes(file_stem, TFOProbes = (".txt", result))
-    zip_file_encoded = base64.b64encode(zip_bytes).decode("utf-8")
-    zipfile_name = f"TFOFinderResultsFor-{file_stem}.zip"
-    return jsonify(zip=zip_file_encoded, html=render_template(
-        'request-completed.html', result=result, program = "TFOFinder", filename=zipfile_name))
-
-def get_pinmol_result(result, **kwargs):
-    file_stem = Path(kwargs["filename"]).stem
-    zip_bytes = get_folder_as_zip(kwargs["output_dir"])
-    zip_file_encoded = base64.b64encode(zip_bytes).decode("utf-8")
-    zipfile_name = f"PinMolResultsFor-{file_stem}.zip"
-    return jsonify(zip=zip_file_encoded, html=render_template(
-        'request-completed.html', result=result, program = "PinMol", filename=zipfile_name))
-
-def get_result_temp(program, result, **kwargs):
+def get_result_temp(program, result):
     zip_file = get_zip_bytes("tempfile", **{program: (".txt", result)})
     zip_file_encoded = base64.b64encode(zip_file).decode("utf-8")
     filename = f"TempResult-{program}.zip"
@@ -135,13 +128,14 @@ def get_result_temp(program, result, **kwargs):
         'request-completed.html', result=result, program = program, filename=filename))
 
 program_dict = { #get args, validate args, return value
-    'tfofinder': Program(lambda req, _: {"filein": req.files.get("ct-file").stream,
-                                      "probe_length": req.form.get("tfofinder-probe-length", type=int),
-                                      "filename": secure_filename(req.files.get("ct-file").filename)},
+    'tfofinder': Program("TFOFinder",
+                        lambda req, _: {"filein": req.files.get("ct-file").stream,
+                                      "probe_lengths": req.form.get("tfofinder-probe-length"), #validation is in validate_arguments
+                                      "filename": secure_filename(req.files.get("ct-file").filename),
+                                         "arguments": tfofinder.parse_arguments("", from_command_line=False)},
                 tfofinder.validate_arguments,
-                  partial(close_file, tfofinder.calculate_result),
-                         get_tfofinder_result), #temp functions
-    'pinmol': Program(lambda req, id: {"filein": req.files.get("ct-file").stream,
+                  partial(close_file, tfofinder.calculate_result)), #temp functions
+    'pinmol': Program("PinMol", lambda req, id: {"filein": req.files.get("ct-file").stream,
                                    "probe_length": req.form.get("pinmol-probe-length", type=int),
                                    "output_dir": pinmol_output_dir / str(id),
                                    "filename": secure_filename(req.files.get("ct-file").filename),
@@ -150,9 +144,8 @@ program_dict = { #get args, validate args, return value
                                                                         f"{optional_argument(req, "pinmol-start-base", "-s", default_value=1)}"
                                                                         f"{optional_argument(req, "pinmol-end-base", "-e", default_value=-1)}",
                                                                         from_command_line=False)
-                                       #todo: start, end
-    }, pinmol.validate_arguments, partial(close_file, pinmol.calculate_result), get_pinmol_result, run_finally=delete_folder_tree),
-    'smfish': Program(lambda x: {"x": "test"}, lambda x: True, lambda x: x, partial(get_result_temp, "smFISH"))
+    }, pinmol.validate_arguments, partial(close_file, pinmol.calculate_result), run_finally=delete_folder_tree),
+    'smfish': Program("smFISH", lambda x: {"x": "test"}, lambda x: True, lambda x: x, partial(get_result_temp, "smFISH"))
 }
 
 @app.route('/')
@@ -176,14 +169,12 @@ def send_request():
     return run_program(program, "The given arguments are invalid",
                          "Something went wrong when calculating your result")
 
-
 def get_exports():
     return {"TFOFinder": tfofinder.exported_values, "PinMol": pinmol.exported_values}
 
 def run_program(prog_name, error_message_validation="Something went wrong", error_message_program="Something went wrong"):
     program = program_dict[prog_name.lower()]
-    kwargs = program.get_args(request, uuid.uuid4())
-    return program.run(kwargs, error_message_validation, error_message_program)
+    return program.run(request, error_message_validation, error_message_program)
 
 if __name__ == '__main__':
     app.run(debug= (True if len(argv) > 1 else False)) #use debug if any commmand line arguments are inputted

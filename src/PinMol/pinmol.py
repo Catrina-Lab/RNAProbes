@@ -1,24 +1,19 @@
 #!/anaconda/bin/python3
 import argparse
 from argparse import Namespace
-import csv
 import sys
-from collections import namedtuple
 
-import RNAstructure
 import pandas as pd
-import os
 from Bio.SeqUtils import MeltingTemp as mt
 import subprocess
-import re
-import fileinput
 import shlex
 from pathlib import Path
 from Bio.Blast import NCBIXML
 from pandas import DataFrame
 
-from src.util import (input_int_in_range, range_type, path_string, path_arg, remove_if_exists,
-                  remove_files, validate_arg, validate_range_arg, parse_file_input)
+from src.RNASuiteUtil import ProgramObject
+from src.util import (input_int_in_range, bounded_int, path_string, path_arg, remove_if_exists,
+                      remove_files, validate_arg, validate_range_arg, parse_file_input)
 from src.RNAUtil import CT_to_sscount_df, RNAStructureWrapper
 
 probeMin = 18
@@ -45,56 +40,13 @@ copyright_msg = (f'{"\n" * 6}'
 match = ["ENERGY", "dG"]  # find header rows in ct file
 
 
-def validate_arguments(probe_length: int, filename, probe_count_max: int, arguments: Namespace, **ignore):
+def validate_arguments(probe_length: int, filename, probe_count_max: int, arguments: Namespace, **ignore) -> dict:
     validate_arg(parse_file_input(filename).suffix == ".ct", "The given file must be a valid .ct file")
     validate_range_arg(probe_length, probeMin, probeMax + 1, "probe length")
     validate_range_arg(probe_count_max, probesToSaveMin, probesToSaveMax + 1, "probe count")
     validate_range_arg(arguments.start, min=1, name="start base")
     validate_range_arg(arguments.end, min=arguments.start + probe_length, name="end base", extra_predicate=lambda x: x == -1)
-    return True
-
-class ProgramObject:
-    def __init__(self, output_dir: Path, file_stem: str, arguments: Namespace, **kwargs):
-        self.result_obj = Namespace(**kwargs)
-        self.output_dir = output_dir
-        self.file_stem = file_stem
-        self.arguments = arguments
-        output_dir.mkdir(parents=True, exist_ok=True)
-    def save_buffer(self, rel_path: str):
-        """
-        Returns a buffer to use to store files
-        :param rel_path: the relative path to store files in. Replaces [fname] with the file stem
-        :return:
-        """
-        return self.file_path(rel_path) #test
-
-    def reset_buffer(self, rel_path: str):
-        remove_if_exists(self.file_path(rel_path))
-
-    def file_path(self, rel_path: str):
-        """
-        Returns a path to use to store files. Same as save_buffer if from the command line, but will always
-        return a path (unlike save_buffer which may return a buffer)
-        :param rel_path: the relative path to store files in. Replaces [fname] with the file stem
-        :return:
-        """
-        return self.output_dir / rel_path.replace("[fname]", self.file_stem)
-
-    def register_file(self, path: Path):
-        pass
-    def get_arg(self, argument):
-        return getattr(self.arguments, argument)
-
-    def set_args(self, **kwargs):
-        for argument, value in kwargs.items():
-            setattr(self.arguments, argument, value)
-
-    def get_result_arg(self, argument):
-        return getattr(self.result_obj, argument)
-
-    def set_result_args(self, **kwargs):
-        for argument, value in kwargs.items():
-            setattr(self.result_obj, argument, value)
+    return {}
 
 def calculate_result(filein, probe_length: int, filename: str,
                      probe_count_max: int, arguments: Namespace, output_dir: Path = None):
@@ -117,6 +69,7 @@ def calculate_result(filein, probe_length: int, filename: str,
     calculate_beacons(DG_probes[["Base Number", "Probe Sequence"]].copy(), probe_length, program_object)
 
     write_result_string(program_object, arguments=arguments)
+    return program_object
 
 def write_result_string(program_object: ProgramObject, arguments: Namespace):
     result_str = get_result_string(program_object.result_obj)
@@ -157,13 +110,13 @@ def regionTarget(df: DataFrame, probe_length: int,  arguments: Namespace) -> tup
     max_base = df.baseno.iat[-1]
     tg_start = input_int_in_range(
         msg="If a specific region within the target is needed, please enter the number of start base (the initial base is 1): ",
-        min=1, max=max_base + 1, initial_value=arguments.start, retry_if_fail=arguments.print)
+        min=1, max=max_base + 1, initial_value=arguments.start, retry_if_fail=arguments.from_command_line)
     tg_end = input_int_in_range(msg=f"  and the number of end base or -1 for the max (minimum {tg_start + probe_length}): ",
                                 fail_message=f"The end value must be at least the start value + probe_length ({tg_start + probe_length}) and less than the "
                                              f"max base ({max_base} or -1).",
                                 min=tg_start + probe_length, max=max_base + 1, initial_value=arguments.end,
                                 extra_predicate=lambda x: x == -1,
-                                retry_if_fail=arguments.print)
+                                retry_if_fail=arguments.from_command_line)
 
     tg_end = max_base if tg_end == -1 else tg_end
     return tg_start, tg_end
@@ -266,7 +219,7 @@ def save_to_fasta(probes: pd.Series, program_object: ProgramObject) -> None:
 
 def try_run_blast(DG_probes: DataFrame, probe_length: int, program_object: ProgramObject):
     arguments = program_object.arguments
-    blast_default = None if arguments.print else "n" #default value if not from cmd_line
+    blast_default = None if arguments.from_command_line else "n" #default value if not from cmd_line
     program_object.set_result_args(blastm = arguments.blast or arguments.no_blast
                                             or blast_default or input('Do you want to use blast alignment information to determine cross homology? y/n: '))
     if program_object.get_result_arg("blastm") == "y": run_blast(DG_probes, probe_length, program_object)
@@ -289,7 +242,7 @@ def run_blast(DG_probes: DataFrame, probe_length: int, program_object: ProgramOb
     picks_sorted.to_csv(program_object.save_buffer("[fname]_Picks_Sorted.csv"), index=False)
 
 def parse_blast_file(DG_probes: DataFrame, probe_length: int, arguments: Namespace = None): #perform blast separately
-    if not arguments.print and not arguments.blast_file: quit_program("You must include an xml blast file if considering blast!")
+    if not arguments.from_command_line and not arguments.blast_file: quit_program("You must include an xml blast file if considering blast!")
     if should_print(arguments): print ("\n"*2+'Please use the file blast_picks.fasta to perform blast with refseq-rna database, and desired organism.\n For targets other than mRNAs make sure you use the Nucleotide collection (nr/nt) instead!')
     save_file = arguments.blast_file or input('Enter path and file name for your existing blast XML file: ')
 
@@ -335,9 +288,9 @@ def calculate_beacons(mb_pick: DataFrame, probe_length: int, program_object: Pro
                    should_print(program_object.arguments, is_content_verbose=False))  # design the stem for the molecular beacon
 
     for j in range(1, int(i) + 1):  # remove results that are highly structured
-        files = [f"{svg_dir_name}/[fname]_{str(j)}.seq", f"{svg_dir_name}/[fname]_{str(j)}.ct", f"{svg_dir_name}/[fname]_{str(j)}.svg"]
-        seq_file, ct_file, svg_file = map(program_object.file_path, files)
-        RNAStructureWrapper.fold(files[0], files[1], program_object.file_path, remove_seq=True)
+        seq_path, ct_path, svg_path = [f"{svg_dir_name}/[fname]_{str(j)}.seq", f"{svg_dir_name}/[fname]_{str(j)}.ct", f"{svg_dir_name}/[fname]_{str(j)}.svg"]
+        RNAStructureWrapper.fold(seq_path, ct_path, program_object.file_path, remove_seq=True)
+        ct_file = program_object.file_path(ct_path)
         with open(ct_file, 'r') as gin:
             linesa = gin.readlines()
             egdraw = float(linesa[0][16:20])
@@ -346,8 +299,8 @@ def calculate_beacons(mb_pick: DataFrame, probe_length: int, program_object: Pro
             skip_svg = egdraw < -7.2 or egdraw > -2.5 or no_bs != paired
 
         if not skip_svg:
-            subprocess.check_output( ["draw", ct_file, svg_file, '--svg', '-n', '1'])
-            program_object.register_file(svg_file)
+            RNAStructureWrapper.draw(ct_path, svg_path, program_object.file_path, arguments="--svg -n 1")
+            program_object.register_file(svg_path)
         remove_files(ct_file)
 
 def stemDesign(mb_picks: DataFrame, probe_length: int, program_object: ProgramObject, should_print = False): #design the stem of the final probes
@@ -452,7 +405,7 @@ def create_arg_parser():
         description='Molecular beacon designer for live-cell imaging of mRNA targets.')
     parser.add_argument("-f", "--file", type=path_string)
     parser.add_argument("-o", "--output-dir", type=functools.partial(path_arg, suffix=""))
-    parser.add_argument("-p", "--probes", type=functools.partial(range_type, min=probeMin, max=probeMax),
+    parser.add_argument("-p", "--probes", type=functools.partial(bounded_int, min=probeMin, max=probeMax),
                         metavar=f"[{probeMin}-{probeMax}]",
                         help=f'The length of PinMol probes, {probeMin}-{probeMax} inclusive')
     # parser.add_argument("-s", "--skip-save-sscount", action="store_false")
@@ -465,7 +418,7 @@ def create_arg_parser():
                         help="The start base to look for probs, must be greater than start (use -1 for the entire sequence)")
     parser.add_argument("-bf", "--blast-file", type=functools.partial(path_string, suffix=".xml"))
     parser.add_argument("-pc", "--probe-count-max",
-                        type=functools.partial(range_type, min=probesToSaveMin, max=probesToSaveMax),
+                        type=functools.partial(bounded_int, min=probesToSaveMin, max=probesToSaveMax),
                         metavar=f"[{probesToSaveMin}-{probesToSaveMax}]",
                         help=f'The maximum amount of probes to save, {probesToSaveMin}-{probesToSaveMax} inclusive')
 
@@ -480,11 +433,11 @@ def create_arg_parser():
 
 def parse_arguments(args: list | str, from_command_line = True):
     args = get_argument_parser().parse_args(args if isinstance(args, list) else shlex.split(args))
-    args.print = from_command_line  # denotes that this is from the command line
+    args.from_command_line = from_command_line  # denotes that this is from the command line
     return args
 
 def should_print(arguments: Namespace, is_content_verbose: bool = False):
-    return arguments and arguments.print and not arguments.quiet and (not is_content_verbose or arguments.verbose)
+    return arguments and arguments.from_command_line and not arguments.quiet and (not is_content_verbose or arguments.verbose)
 
 
 def run(args, from_command_line = True):
@@ -508,3 +461,7 @@ def run(args, from_command_line = True):
         print(
             "\n" + "Check the structure for the selected probes using your favorite browser by opening the corresponding SVG files!")
         print("\n" + "If no SVG files are found, increase the number of probes and/or target region!")
+
+if __name__ == "__main__":
+    #if we succeed somehow (throught pythonpath, etc)...
+    run(sys.argv[1:])

@@ -10,7 +10,7 @@ from pathlib import Path
 # import RNAstructure
 from pandas import DataFrame
 
-from src.util import range_type, path_string, path_arg
+from src.util import bounded_int, path_string, path_arg
 undscr = ("->" * 40) + "\n"
 copyright_msg = (f'{"\n" * 6}'
           f'smFISH_HybEff program  Copyright (C) 2022  Irina E. Catrina\n' +
@@ -211,11 +211,11 @@ def create_arg_parser():
 
 def get_command_line_arguments(args: str | list, from_command_line = True) -> Namespace:
     args = get_argument_parser().parse_args(args if isinstance(args, list) else shlex.split(args))
-    if from_command_line: args.print = True  # denotes that this is from the command line
+    args.from_command_line = from_command_line  # denotes that this is from the command line
     return args
 
 def should_print(arguments, is_content_verbose = False):
-    return arguments and arguments.print and not arguments.quiet and (not is_content_verbose or arguments.verbose)
+    return arguments and arguments.from_command_line and not arguments.quiet and (not is_content_verbose or arguments.verbose)
 
 def run(args, from_command_line = True):
     arguments = get_command_line_arguments(args, from_command_line=from_command_line)
@@ -234,3 +234,7 @@ def run(args, from_command_line = True):
         print("Check the *final_filtered_file.csv for proposed smFISH probes. However, if not enough probes have been "
               "selected given the initial selection criteria or only the CDS is targeted, please review the *filtered_file.csv "
               "and *3.csv to select additional probes.")
+
+if __name__ == "__main__":
+    #if we succeed somehow (throught pythonpath, etc)...
+    run(sys.argv[1:])

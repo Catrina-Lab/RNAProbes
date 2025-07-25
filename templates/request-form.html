@@ -26,8 +26,8 @@
             <h3 class="fs-4"><i class="fas fa-bullseye me-2"></i>TFOFinder Options</h3>
             <div class="mb-3">
               <label for="tfofinder-probe-length" class="form-label">Probe Length</label>
-              <input type="number" class="form-control" id="tfofinder-probe-length" name="tfofinder-probe-length" min="{{exports.TFOFinder.probeMin}}" max="{{exports.TFOFinder.probeMax}}" placeholder="e.g., 9" required>
-              <div class="form-text">Choose a number between {{exports.TFOFinder.probeMin}} and {{exports.TFOFinder.probeMax}}.</div>
+              <input type="text" class="form-control" id="tfofinder-probe-length" name="tfofinder-probe-length" placeholder="e.g., 9" required>
+              <div class="form-text">Choose a number or range between {{exports.TFOFinder.probeMin}} and {{exports.TFOFinder.probeMax}}.</div>
             </div>
           </div>
           {% endif %}

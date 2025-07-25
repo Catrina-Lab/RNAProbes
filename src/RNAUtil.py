@@ -57,7 +57,6 @@ def getSSCountDF(ct_dataframe : DataFrame, save_to_file: bool = None, output_fil
 
     if save_to_file:
         df_grouped.to_csv(output_file, index=False, header=False)
-
     return df_grouped
 
 class RNAStructureWrapper:
@@ -86,7 +85,7 @@ class RNAStructureWrapper:
 
     @staticmethod
     def draw(file_in: str | PathLike[str], file_out: str | PathLike[str], path_mapper: Callable[[str], Path | str] = lambda x: x, remove_ct = False,
-                    arguments: str = "") -> DataFrame:
+                    arguments: str = "") -> Path | str:
         ct_file = path_mapper(file_in)
         svg_file = path_mapper(file_out)
 

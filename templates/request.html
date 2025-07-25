@@ -29,15 +29,21 @@
   const responseContainer = document.getElementById("response-container");
   const formContainer = document.getElementById("form-container");
   const programs = {{ programs | tojson }};
+  const defaultEndBaseMin = {{1 + exports.PinMol.probeMin}};
+  const programCased = Object.fromEntries(programs.map(e=>[e.toLowerCase(), e])); //easier than changing half the time (and maybe forgetting once)
   const resultUrls = {};
 
   form.addEventListener("submit", e => {
     e.preventDefault();
-    formContainer.classList.add("d-none");
-    responseContainer.classList.remove("d-none");
-    sendRequests();
+    if(formIsValid(e)){
+      formContainer.classList.add("d-none");
+      responseContainer.classList.remove("d-none");
+      sendRequests();
+    }
   });
-  const defaultEndBaseMin = {{1 + exports.PinMol.probeMin}};
+  function formIsValid(){
+    return true; //temp
+  }
   const endBaseInput = form.querySelector("#pinmol-end-base");
   const endBaseText = form.querySelector("#pinmol-end-base-text");
   const startBaseInput = form.querySelector("#pinmol-start-base");
@@ -61,7 +67,7 @@
   }
 
   setProbeMin();
-  
+
   document.addEventListener('click', e => {
     const downloadBtn = e.target.closest('[id$="-download-btn"]');
     if (downloadBtn) {
@@ -75,6 +81,7 @@
   }
 
   async function sendRequest(program) {
+    program = programCased[program.toLowerCase()];
     const data = new FormData(form);
     const response = await fetch(`/send-request?program=${program}`, {
       method: "POST",
