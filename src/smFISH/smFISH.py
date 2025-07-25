@@ -12,7 +12,7 @@ from pandas import DataFrame
 
 from src.util import bounded_int, path_string, path_arg
 undscr = ("->" * 40) + "\n"
-copyright_msg = (f'{"\n" * 6}'
+copyright_msg = (("\n" * 6) +
           f'smFISH_HybEff program  Copyright (C) 2022  Irina E. Catrina\n' +
           'This program comes with ABSOLUTELY NO WARRANTY;\n' +
           'This is free software, and you are welcome to redistribute it\n' +

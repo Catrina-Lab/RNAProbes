@@ -7,8 +7,6 @@ from collections.abc import Callable
 from flask import Flask, render_template, request, redirect, url_for, jsonify
 from sys import argv
 
-from pydantic import UUID4
-
 from src.RNASuiteUtil import ProgramObject
 from src.TFOFinder import tfofinder
 from src.PinMol import pinmol
@@ -115,7 +113,7 @@ def get_zip_bytes(filename, **kwargs) -> bytes:
         for name, value in kwargs.items():
             zip_info = zipfile.ZipInfo(name)
             zip_info.date_time = time.localtime(time.time())[:6]
-            zip_file.writestr(f"{filename}-{name.replace("_", "-")}{value[0]}", value[1])
+            zip_file.writestr(f"{filename}-{name.replace('_', '-')}{value[0]}", value[1])
             # print(f"{filename}-{name.replace("_", "-")}{value[0]}")
     file_obj.seek(0)
     return file_obj.getvalue()
@@ -141,8 +139,8 @@ program_dict = { #get args, validate args, return value
                                    "filename": secure_filename(req.files.get("ct-file").filename),
                                    "probe_count_max": optional_argument(req, "pinmol-probe-count-max", default_value=50, type=int),
                                     "arguments": pinmol.parse_arguments(f"-nb -w"
-                                                                        f"{optional_argument(req, "pinmol-start-base", "-s", default_value=1)}"
-                                                                        f"{optional_argument(req, "pinmol-end-base", "-e", default_value=-1)}",
+                                                                        f"{optional_argument(req, 'pinmol-start-base', '-s', default_value=1)}"
+                                                                        f"{optional_argument(req, 'pinmol-end-base', '-e', default_value=-1)}",
                                                                         from_command_line=False)
     }, pinmol.validate_arguments, partial(close_file, pinmol.calculate_result), run_finally=delete_folder_tree),
     'smfish': Program("smFISH", lambda x: {"x": "test"}, lambda x: True, lambda x: x, partial(get_result_temp, "smFISH"))

@@ -26,7 +26,7 @@ exported_values = {"probeMin": probeMin, "probeMax": probeMax, "probesToSaveMin"
 svg_dir_name = "[fname]_svg_files"
 
 undscr = ("->" * 40) + "\n"
-copyright_msg = (f'{"\n" * 6}'
+copyright_msg = (("\n" * 6) +
       f'PinMol  Copyright (C) 2017  Irina E. Catrina\n' +
       'This program comes with ABSOLUTELY NO WARRANTY;\n' +
       'This is free software, and you are welcome to redistribute it\n' +

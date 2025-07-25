@@ -31,7 +31,7 @@ class DiscontinuousRange:
         first_elem, last_elem = (range_obj.start, range_obj.stop - 1) if range_obj.step > 0 else (range_obj.stop + 1, range_obj.start)
         if is_not_below_min(min_value, first_elem) and is_below_max(max_value, last_elem):
             return range_obj
-        raise ValueError(f"Range {range_obj} is not between {min_value or "negative infinity"} inclusive and {max_value or "infinity"} exclusive")
+        raise ValueError(f"Range {range_obj} is not between {min_value or 'negative infinity'} inclusive and {max_value or 'infinity'} exclusive")
 
     @staticmethod
     def template(min_value = None, max_value = None, input_string = True):
@@ -102,10 +102,10 @@ def validate_range_arg(input: int, min = None, max = None, name = "input", overw
     :param msg:
     :return:
     """
-    validate_arg(type(input) is int, overwrite_msg or f"The given {name} is not an integer! It must be an integer between {min or "negative Infinity"} inclusive and {max or "Infinity"} exclusive")
+    validate_arg(type(input) is int, overwrite_msg or f"The given {name} is not an integer! It must be an integer between {min or 'negative Infinity'} inclusive and {max or 'Infinity'} exclusive")
     min_OK = is_not_below_min(min, input)
     max_OK = is_below_max(max, input)
-    validate_arg((max_OK and min_OK) or extra_predicate(input), overwrite_msg or f"The given {name} ({input}) is {"too small" if max_OK else "too large"}! It must be an integer between {min or "negative Infinity"} inclusive and {max or "Infinity"} exclusive")
+    validate_arg((max_OK and min_OK) or extra_predicate(input), overwrite_msg or f"The given {name} ({input}) is {'too small' if max_OK else 'too large'}! It must be an integer between {min or 'negative Infinity'} inclusive and {max or 'Infinity'} exclusive")
 
 def is_not_below_min(min, *values):
     return all(min is None or value >= min for value in values)
