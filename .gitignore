@@ -3,5 +3,5 @@ Temp_files/*
 .idea/
 profile.html
 profile.json
-__pycache__/*
+**/__pycache__/*
 user-files/*
