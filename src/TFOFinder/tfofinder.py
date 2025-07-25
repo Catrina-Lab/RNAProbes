@@ -140,7 +140,7 @@ def parse_arguments(args: str | list, from_command_line = True):
     args.from_command_line = from_command_line  # denotes that this is from the command line
     return args
 
-def run(args, from_command_line = True):
+def run(args="", from_command_line = True):
     arguments = parse_arguments(args, from_command_line = from_command_line)
     if should_print(arguments):
         print("\n" * 5)

@@ -49,8 +49,8 @@ class DiscontinuousRange:
     def __repr__(self):
         return f"DiscontinuousRange({str(self)})"
 
-def input_value(msg : str, mapper: type[any] = int, predicate = lambda n: True, fail_message : str = None, initial_value = None, retry_if_fail=False):
-    fail_message = fail_message or "Please input an integer"
+def input_value(msg : str, mapper: type[any] = int, predicate = lambda n: True, fail_message : str = None, initial_value = None, retry_if_fail=True):
+    fail_message = fail_message or msg
     while True:
         try:
             x = initial_value or mapper(input(msg))
@@ -63,14 +63,14 @@ def input_value(msg : str, mapper: type[any] = int, predicate = lambda n: True, 
             else: raise ValueError(fail_message) from e
 
 def input_int_in_range(min: int = None, max: int = None, msg : str = None, fail_message : str = None,
-                       initial_value = None, extra_predicate=lambda x: False, retry_if_fail=False) -> int:
+                       initial_value = None, extra_predicate=lambda x: False, retry_if_fail=True) -> int:
     fail_message = fail_message or f"Please input an integer between {min} (inclusive) and {max} (exclusive)."
     msg = msg or f"Input an integer between {min} (inclusive) and {max} (exclusive): "
     return input_value(msg, initial_value=initial_value, predicate = lambda x: ((min is None or x >= min) and (max is None or x < max)) or extra_predicate(x),
                        fail_message = fail_message, retry_if_fail=retry_if_fail)
 
 def input_range(min: int = None, max: int = None, msg : str = None, fail_message : str = None,
-                       initial_value = None, retry_if_fail=False) -> DiscontinuousRange:
+                       initial_value = None, retry_if_fail=True) -> DiscontinuousRange:
     fail_message = fail_message or f"Please input a range contained between {min} (inclusive) and {max} (exclusive)."
     msg = msg or f"Input a range contained between {min} (inclusive) and {max} (exclusive): "
     return input_value(msg, mapper=DiscontinuousRange.template(min_value=min, max_value=max), initial_value=initial_value,

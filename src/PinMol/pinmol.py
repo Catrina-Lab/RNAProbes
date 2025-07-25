@@ -97,7 +97,7 @@ def get_GC_probes(sscount_df, probe_length, structure_count, program_object: Pro
 
     program_object.set_result_args(region_probes = probes_df, len_GC_probes = len(GC_probes),
                                    tg_start = tg_start , tg_end=tg_end)
-    probes_df.to_csv(program_object.save_buffer("[fname]_all_probes_sorted_ss.csv"), index=False)
+    #probes_df.to_csv(program_object.save_buffer("[fname]_all_probes_sorted_ss.csv"), index=False)
     GC_probes.to_csv(program_object.save_buffer("[fname]_GC_probes.csv"), index=False)
     return GC_probes
 
@@ -208,7 +208,7 @@ def get_data_sorted(GC_probes: DataFrame, read_oligosc: DataFrame, program_objec
                                           kind="stable")  # sort descending by sscount = larger sscount more accessible target region
     data_sorted.to_csv(program_object.save_buffer("[fname]_probes_sortedby5.csv"), index=False)
     # determine the total number of probes that meet the eg criteria for the selected target (region or full)
-    if len(data_sorted) == 0: quit_program("No probes meet the criteria for the selected region, please expand the search region and try again.")
+    if len(data_sorted) == 0: quit_program("No probes meet the criteria for the selected region, please expand the search region or choose a lower probe length.")
 
     return data_sorted
 
@@ -440,7 +440,7 @@ def should_print(arguments: Namespace, is_content_verbose: bool = False):
     return arguments and arguments.from_command_line and not arguments.quiet and (not is_content_verbose or arguments.verbose)
 
 
-def run(args, from_command_line = True):
+def run(args="", from_command_line = True):
     arguments = parse_arguments(args, from_command_line)
     if should_print(arguments): print(copyright_msg)
     file_name = arguments.file or input('Enter the ct file path and name: ')

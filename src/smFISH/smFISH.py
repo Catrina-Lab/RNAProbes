@@ -217,7 +217,7 @@ def get_command_line_arguments(args: str | list, from_command_line = True) -> Na
 def should_print(arguments, is_content_verbose = False):
     return arguments and arguments.from_command_line and not arguments.quiet and (not is_content_verbose or arguments.verbose)
 
-def run(args, from_command_line = True):
+def run(args="", from_command_line = True):
     arguments = get_command_line_arguments(args, from_command_line=from_command_line)
     if should_print(arguments): print(copyright_msg)
 
