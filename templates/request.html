@@ -55,7 +55,8 @@
   });
 
   function setProbeMin(){
-    if(pinmolProbeLengthInput.value != ""){
+    if(pinmolProbeLengthInput){
+      if(pinmolProbeLengthInput.value != ""){
         min = parseInt(pinmolProbeLengthInput.value) + (parseInt(startBaseInput.value) || 1);
         //endBaseInput.setAttribute("min", min);
         endBaseInput.min = min
@@ -64,12 +65,14 @@
         endBaseInput.min = defaultEndBaseMin;
         endBaseText.textContent = defaultEndBaseMin;
       }
+    }
   }
 
   setProbeMin();
 
   document.addEventListener('click', e => {
     const downloadBtn = e.target.closest('[id$="-download-btn"]');
+    console.log(downloadBtn);
     if (downloadBtn) {
       const program = downloadBtn.id.split("-", 1)[0];
       downloadFile(program);

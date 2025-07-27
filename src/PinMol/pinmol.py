@@ -261,7 +261,7 @@ def parse_blast_file(DG_probes: DataFrame, probe_length: int, arguments: Namespa
                     last_query = hsp.query
 
                     assert hsp.positives <= probe_length, "XML file invalid: A different probe length was used for blast to obtain the current XML file!"
-
+                    #< is intended
                     if hsp.positives < probe_length and hsp.frame == (1, -1) and hsp.gaps == 0:
                         temp_df.append([pick, hsp.positives, hsp.gaps])
         records.close()

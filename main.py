@@ -171,8 +171,12 @@ def get_exports():
     return {"TFOFinder": tfofinder.exported_values, "PinMol": pinmol.exported_values}
 
 def run_program(prog_name, error_message_validation="Something went wrong", error_message_program="Something went wrong"):
+    # import time
+    # prev = time.time_ns()
     program = program_dict[prog_name.lower()]
-    return program.run(request, error_message_validation, error_message_program)
+    result =  program.run(request, error_message_validation, error_message_program)
+    # print(((time.time_ns() - prev) // 1_000) / 1_000)
+    return result
 
 if __name__ == '__main__':
     app.run(debug= (True if len(argv) > 1 else False)) #use debug if any commmand line arguments are inputted
