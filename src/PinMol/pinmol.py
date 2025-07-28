@@ -63,10 +63,10 @@ def calculate_result(filein, probe_length: int, filename: str,
 
     # write the fasta file containing the final sequences for blast
     save_to_fasta(DG_probes["Probe Sequence"], program_object)
-    try_run_blast(DG_probes, probe_length, program_object)
+    probes_sorted = try_run_blast(DG_probes, probe_length, program_object)
 
     
-    calculate_beacons(DG_probes[["Base Number", "Probe Sequence"]].copy(), probe_length, program_object)
+    calculate_beacons(probes_sorted[["Base Number", "Probe Sequence"]].copy(), probe_length, program_object)
 
     write_result_string(program_object, arguments=arguments)
     return program_object
@@ -217,14 +217,14 @@ def save_to_fasta(probes: pd.Series, program_object: ProgramObject) -> None:
         output_str = ">\n" + "\n>\n".join(probes)
         f1.write(output_str)
 
-def try_run_blast(DG_probes: DataFrame, probe_length: int, program_object: ProgramObject):
+def try_run_blast(DG_probes: DataFrame, probe_length: int, program_object: ProgramObject) -> DataFrame:
     arguments = program_object.arguments
     blast_default = None if arguments.from_command_line else "n" #default value if not from cmd_line
     program_object.set_result_args(blastm = arguments.blast or arguments.no_blast
                                             or blast_default or input('Do you want to use blast alignment information to determine cross homology? y/n: '))
-    if program_object.get_result_arg("blastm") == "y": run_blast(DG_probes, probe_length, program_object)
+    return run_blast(DG_probes, probe_length, program_object) if program_object.get_result_arg("blastm") == "y" else DG_probes
 
-def run_blast(DG_probes: DataFrame, probe_length: int, program_object: ProgramObject):
+def run_blast(DG_probes: DataFrame, probe_length: int, program_object: ProgramObject) -> DataFrame:
     blast_results = parse_blast_file(DG_probes, probe_length, program_object.arguments)
 
     df_grouped = blast_results.groupby(['Pick#']).agg({'Positives': 'max'})
@@ -240,6 +240,7 @@ def run_blast(DG_probes: DataFrame, probe_length: int, program_object: ProgramOb
     picks_sorted = picks_sorted.sort_values(['Positives', 'Pick#'], ascending=[True, True], ignore_index=True,
                                             kind="stable")  # stable so the result is the same as long as inputs are identical
     picks_sorted.to_csv(program_object.save_buffer("[fname]_Picks_Sorted.csv"), index=False)
+    return picks_sorted
 
 def parse_blast_file(DG_probes: DataFrame, probe_length: int, arguments: Namespace = None): #perform blast separately
     if not arguments.from_command_line and not arguments.blast_file: quit_program("You must include an xml blast file if considering blast!")

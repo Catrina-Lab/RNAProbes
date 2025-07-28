@@ -57,7 +57,7 @@ class Program:
             kwargs = self._get_args(request, uuid.uuid4())
             modified_kwargs = self._validate_args(kwargs, validate_err_msg)
             result = self._run_program(kwargs | modified_kwargs, runtime_err_msg, validate_err_msg=validate_err_msg)
-            return self._get_response(result)
+            return self._get_response(result, **kwargs)
         except Exception as e:
             return send_error_response(e, **kwargs)
         finally:

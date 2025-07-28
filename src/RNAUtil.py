@@ -64,13 +64,14 @@ class RNAStructureWrapper:
     def oligoscreen(input: pd.Series, file_name: str, path_mapper: Callable[[str], Path | str] = lambda x: x, arguments: str = "") -> DataFrame:
         input_path = path_mapper(f"{file_name}_oligoscreen_input.lis")
         output_path = path_mapper(f"{file_name}_oligoscreen_output.csv")
+        try:
+            input.to_csv(input_path, index=False, header=False)
 
-        input.to_csv(input_path, index=False, header=False)
-
-        subprocess.check_output(["oligoscreen",  input_path, output_path, *shlex.split(arguments)])
-        read_oligosc = pd.read_csv(output_path, delimiter='\t', usecols=[1, 2, 3])
-        remove_files(input_path, output_path)
-        return read_oligosc
+            subprocess.check_output(["oligoscreen",  input_path, output_path, *shlex.split(arguments)])
+            read_oligosc = pd.read_csv(output_path, delimiter='\t', usecols=[1, 2, 3])
+            return read_oligosc
+        finally:
+            remove_files(input_path, output_path)
 
     @staticmethod
     def fold(file_in: str | PathLike[str], file_out: str | PathLike[str], path_mapper: Callable[[str], Path | str] = lambda x: x, remove_seq = False,

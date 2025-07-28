@@ -30,7 +30,7 @@
   const formContainer = document.getElementById("form-container");
   const programs = {{ programs | tojson }};
   const defaultEndBaseMin = {{1 + exports.PinMol.probeMin}};
-  const programCased = Object.fromEntries(programs.map(e=>[e.toLowerCase(), e])); //easier than changing half the time (and maybe forgetting once)
+  const programsCased = Object.fromEntries(programs.map(e=>[e.toLowerCase(), e])); //easier than changing half the time (and maybe forgetting once)
   const resultUrls = {};
 
   form.addEventListener("submit", e => {
@@ -55,7 +55,7 @@
   });
 
   function setProbeMin(){
-    if(pinmolProbeLengthInput){
+    if(programsCased["pinmol"]){
       if(pinmolProbeLengthInput.value != ""){
         min = parseInt(pinmolProbeLengthInput.value) + (parseInt(startBaseInput.value) || 1);
         //endBaseInput.setAttribute("min", min);
@@ -84,7 +84,7 @@
   }
 
   async function sendRequest(program) {
-    program = programCased[program.toLowerCase()];
+    program = programsCased[program.toLowerCase()];
     const data = new FormData(form);
     const response = await fetch(`/send-request?program=${program}`, {
       method: "POST",
