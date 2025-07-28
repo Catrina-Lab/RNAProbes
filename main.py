@@ -126,16 +126,16 @@ def get_result_temp(program: str, result: str):
 
 program_dict = { #get args, validate args, return value
     'tfofinder': Program("TFOFinder",
-                        lambda req, _: {"filein": req.files_to_delete.get("ct-file").stream,
+                        lambda req, _: {"filein": req.files.get("ct-file").stream,
                                       "probe_lengths": req.form.get("tfofinder-probe-length"), #validation is in validate_arguments
-                                      "filename": secure_filename(req.files_to_delete.get("ct-file").filename),
+                                      "filename": secure_filename(req.files.get("ct-file").filename),
                                          "arguments": tfofinder.parse_arguments("", from_command_line=False)},
                 tfofinder.validate_arguments,
                   partial(close_file, tfofinder.calculate_result)), #temp functions
-    'pinmol': Program("PinMol", lambda req, id: {"filein": req.files_to_delete.get("ct-file").stream,
+    'pinmol': Program("PinMol", lambda req, id: {"filein": req.files.get("ct-file").stream,
                                    "probe_length": req.form.get("pinmol-probe-length", type=int),
                                    "output_dir": pinmol_output_dir / str(id),
-                                   "filename": secure_filename(req.files_to_delete.get("ct-file").filename),
+                                   "filename": secure_filename(req.files.get("ct-file").filename),
                                    "probe_count_max": optional_argument(req, "pinmol-probe-count-max", default_value=50, type=int),
                                     "arguments": pinmol.parse_arguments(f"-nb -w"
                                                                         f"{optional_argument(req, 'pinmol-start-base', '-s', default_value=1)}"
