@@ -1,3 +1,4 @@
+from __future__ import annotations
 import os, sys
 from argparse import Namespace
 import shlex
@@ -10,6 +11,7 @@ from pathlib import Path
 # import RNAstructure
 from pandas import DataFrame
 
+from src.RNASuiteUtil import run_command_line
 from src.util import bounded_int, path_string, path_arg
 undscr = ("->" * 40) + "\n"
 copyright_msg = (("\n" * 6) +
@@ -237,4 +239,4 @@ def run(args="", from_command_line = True):
 
 if __name__ == "__main__":
     #if we succeed somehow (throught pythonpath, etc)...
-    run(sys.argv[1:])
+    run_command_line(run, sys.argv[1:])

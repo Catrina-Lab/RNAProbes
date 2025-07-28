@@ -1,19 +1,19 @@
 #!/anaconda/bin/python3
+from __future__ import annotations
 import argparse
 from argparse import Namespace
 import sys
 
 import pandas as pd
 from Bio.SeqUtils import MeltingTemp as mt
-import subprocess
 import shlex
 from pathlib import Path
 from Bio.Blast import NCBIXML
 from pandas import DataFrame
 
-from src.RNASuiteUtil import ProgramObject
+from src.RNASuiteUtil import ProgramObject, run_command_line
 from src.util import (input_int_in_range, bounded_int, path_string, path_arg, remove_if_exists,
-                      remove_files, validate_arg, validate_range_arg, parse_file_input)
+                      remove_files, validate_arg, validate_range_arg, parse_file_input, ValidationError, input_value)
 from src.RNAUtil import CT_to_sscount_df, RNAStructureWrapper
 
 probeMin = 18
@@ -102,7 +102,7 @@ def get_GC_probes(sscount_df, probe_length, structure_count, program_object: Pro
     return GC_probes
 
 def region_probes(sscount_df: DataFrame, probe_length: int, structure_count: int, arguments: Namespace) -> tuple[DataFrame, int, int]:
-    start_base,end_base = regionTarget(sscount_df, probe_length, arguments)
+    start_base, end_base = regionTarget(sscount_df, probe_length, arguments)
     probes = seqProbes(sscount_df, probe_length, structure_count, start=start_base-1, end=end_base).sort_values(by='sscount', ascending=False, ignore_index=True, kind="stable") #sort descending by sscount = larger sscount more accessible target region
     return probes, start_base, end_base
 
@@ -208,7 +208,7 @@ def get_data_sorted(GC_probes: DataFrame, read_oligosc: DataFrame, program_objec
                                           kind="stable")  # sort descending by sscount = larger sscount more accessible target region
     data_sorted.to_csv(program_object.save_buffer("[fname]_probes_sortedby5.csv"), index=False)
     # determine the total number of probes that meet the eg criteria for the selected target (region or full)
-    if len(data_sorted) == 0: quit_program("No probes meet the criteria for the selected region, please expand the search region or choose a lower probe length.")
+    program_object.validate(len(data_sorted) > 0, "No probes meet the criteria for the selected region, please expand the search region or choose a shorter probe length.")
 
     return data_sorted
 
@@ -225,7 +225,7 @@ def try_run_blast(DG_probes: DataFrame, probe_length: int, program_object: Progr
     return run_blast(DG_probes, probe_length, program_object) if program_object.get_result_arg("blastm") == "y" else DG_probes
 
 def run_blast(DG_probes: DataFrame, probe_length: int, program_object: ProgramObject) -> DataFrame:
-    blast_results = parse_blast_file(DG_probes, probe_length, program_object.arguments)
+    blast_results = parse_blast_file(DG_probes, probe_length, program_object)
 
     df_grouped = blast_results.groupby(['Pick#']).agg({'Positives': 'max'})
     df_grouped = df_grouped.reset_index()
@@ -242,10 +242,15 @@ def run_blast(DG_probes: DataFrame, probe_length: int, program_object: ProgramOb
     picks_sorted.to_csv(program_object.save_buffer("[fname]_Picks_Sorted.csv"), index=False)
     return picks_sorted
 
-def parse_blast_file(DG_probes: DataFrame, probe_length: int, arguments: Namespace = None): #perform blast separately
-    if not arguments.from_command_line and not arguments.blast_file: quit_program("You must include an xml blast file if considering blast!")
-    if should_print(arguments): print ("\n"*2+'Please use the file blast_picks.fasta to perform blast with refseq-rna database, and desired organism.\n For targets other than mRNAs make sure you use the Nucleotide collection (nr/nt) instead!')
-    save_file = arguments.blast_file or input('Enter path and file name for your existing blast XML file: ')
+def parse_blast_file(DG_probes: DataFrame, probe_length: int, program_object: ProgramObject = None): #perform blast separately
+    arguments = program_object.arguments
+    program_object.validate(arguments.from_command_line or arguments.blast_file, "You must include an xml blast file if considering blast!")
+    if should_print(arguments): print("\n"*2+'Please use the file blast_picks.fasta to perform blast with refseq-rna database, and desired organism.\n For targets other than mRNAs make sure you use the Nucleotide collection (nr/nt) instead!')
+    save_file = input_value('Enter path and file name for your existing blast XML file: ', Path,
+                            predicate = lambda path: path.exists() and path.suffix == ".xml",
+                            fail_message='Your file is invalid (either does not exist or is not an xml file). Please enter the path and file name for your existing blast XML file: ',
+                            initial_value=arguments.blast_file,
+                            retry_if_fail=arguments.from_command_line)
 
     pick = 0
     first_query = None
@@ -261,7 +266,7 @@ def parse_blast_file(DG_probes: DataFrame, probe_length: int, arguments: Namespa
                     first_query = first_query or hsp.query
                     last_query = hsp.query
 
-                    assert hsp.positives <= probe_length, "XML file invalid: A different probe length was used for blast to obtain the current XML file!"
+                    program_object.validate(hsp.positives <= probe_length, "Blast file invalid: A different probe length was used for blast to obtain the current XML file!")
                     #< is intended
                     if hsp.positives < probe_length and hsp.frame == (1, -1) and hsp.gaps == 0:
                         temp_df.append([pick, hsp.positives, hsp.gaps])
@@ -269,20 +274,20 @@ def parse_blast_file(DG_probes: DataFrame, probe_length: int, arguments: Namespa
 
     blast_results = DataFrame(temp_df, columns=["Pick#", "Positives", "Gaps"])
 
-    validate_xml_file(pick, first_query, last_query, DG_probes)
+    validate_xml_file(pick, first_query, last_query, DG_probes, program_object)
     return blast_results
 
-def validate_xml_file(pick: int, first_query: str, last_query: str, DG_probes: DataFrame):
+def validate_xml_file(pick: int, first_query: str, last_query: str, DG_probes: DataFrame, program_object: ProgramObject):
     first_probe = DG_probes["Probe Sequence"][0].replace('U', 'T')
     last_probe = DG_probes["Probe Sequence"].iat[-1].replace('U', 'T')
 
-    assert pick == len(DG_probes), "XML file invalid: the number of queries does not match the number of probes"  # check if the correct file was used for blast
-    assert first_query == first_probe, "XML file invalid: the first query is not the same as the first sequence in the blast_picks.fasta file"  # check if the correct file was used for blast
-    assert last_query in last_probe, "XML file invalid: the last query is not contained in the last sequence in the blast_picks.fasta file"  # check if the correct file was used for blast
+    program_object.validate(pick == len(DG_probes), "Blast file invalid: the number of queries does not match the number of probes")  # check if the correct file was used for blast
+    program_object.validate(first_query == first_probe, "Blast file invalid: the first query is not the same as the first sequence in the blast_picks.fasta file")  # check if the correct file was used for blast
+    program_object.validate(last_query in last_probe, "Blast file invalid: the last query is not contained in the last sequence in the blast_picks.fasta file")  # check if the correct file was used for blast
 
 def calculate_beacons(mb_pick: DataFrame, probe_length: int, program_object: ProgramObject):
     #todo: is it verbose?
-    program_object.file_path(svg_dir_name).mkdir(parents=True, exist_ok=True)  # make sure the directory exists
+    program_object.create_dir(svg_dir_name)  # make sure the directory exists
     if program_object.get_arg("overwrite"):
         program_object.reset_buffer(f"[fname]_Final_molecular_beacons.csv")
     i = stemDesign(mb_pick, probe_length, program_object,
@@ -301,7 +306,7 @@ def calculate_beacons(mb_pick: DataFrame, probe_length: int, program_object: Pro
 
         if not skip_svg:
             RNAStructureWrapper.draw(ct_path, svg_path, program_object.file_path, arguments="--svg -n 1")
-            program_object.register_file(svg_path)
+            program_object.register_file(svg_path, register_to_delete=True)
         remove_files(ct_file)
 
 def stemDesign(mb_picks: DataFrame, probe_length: int, program_object: ProgramObject, should_print = False): #design the stem of the final probes
@@ -390,9 +395,6 @@ def stemDesign(mb_picks: DataFrame, probe_length: int, program_object: ProgramOb
             seqfile.write(f';\n{i+1} at base # {bs_ps[i]} molecular beacon\n{beacon}1')
     return len(fseq)
 
-def quit_program(msg : str):
-    sys.exit(msg)
-
 argument_parser = None
 def get_argument_parser():
     global argument_parser
@@ -417,7 +419,7 @@ def create_arg_parser():
     parser.add_argument("-s", "--start", type=int, help="The start base to look for probs, min 1")
     parser.add_argument("-e", "--end", type=int,
                         help="The start base to look for probs, must be greater than start (use -1 for the entire sequence)")
-    parser.add_argument("-bf", "--blast-file", type=functools.partial(path_string, suffix=".xml"))
+    parser.add_argument("-bf", "--blast-file", type=functools.partial(path_arg, suffix=".xml"))
     parser.add_argument("-pc", "--probe-count-max",
                         type=functools.partial(bounded_int, min=probesToSaveMin, max=probesToSaveMax),
                         metavar=f"[{probesToSaveMin}-{probesToSaveMax}]",
@@ -440,8 +442,7 @@ def parse_arguments(args: list | str, from_command_line = True):
 def should_print(arguments: Namespace, is_content_verbose: bool = False):
     return arguments and arguments.from_command_line and not arguments.quiet and (not is_content_verbose or arguments.verbose)
 
-
-def run(args="", from_command_line = True):
+def run(args: str | list="", from_command_line: bool = True):
     arguments = parse_arguments(args, from_command_line)
     if should_print(arguments): print(copyright_msg)
     file_name = arguments.file or input('Enter the ct file path and name: ')
@@ -465,4 +466,4 @@ def run(args="", from_command_line = True):
 
 if __name__ == "__main__":
     #if we succeed somehow (throught pythonpath, etc)...
-    run(sys.argv[1:])
+    run_command_line(run, sys.argv[1:])

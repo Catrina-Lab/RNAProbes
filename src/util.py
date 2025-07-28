@@ -1,5 +1,5 @@
 # A collection of utility methods and classes that can be useful in other projects as well
-
+from __future__ import annotations
 import io
 import shutil
 import zipfile

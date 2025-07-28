@@ -5,3 +5,5 @@ profile.html
 profile.json
 **/__pycache__/*
 user-files/*
+**/.venv/
+**/venv/

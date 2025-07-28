@@ -1,6 +1,8 @@
+from __future__ import annotations
 import sys
 
 from src.PinMol import pinmol
+from src.RNASuiteUtil import run_command_line
 from src.TFOFinder import tfofinder
 from src.smFISH import smFISH
 from src.util import input_value
@@ -15,4 +17,4 @@ if __name__ == "__main__":
                             lambda program: program in programs.keys(), retry_if_fail=len(sys.argv) >= 2,
                           initial_value=sys.argv[1].lower() if len(sys.argv) >= 2 else None)
     run = programs[program]
-    run(sys.argv[2:])
+    run_command_line(run, sys.argv[2:])

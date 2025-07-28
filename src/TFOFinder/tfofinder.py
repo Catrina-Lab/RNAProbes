@@ -1,3 +1,4 @@
+from __future__ import annotations
 import shlex
 import sys
 import os
@@ -11,7 +12,7 @@ from Bio.Seq import Seq #don't think this is used even in the original
 from numpy.f2py.rules import arg_rules
 from pandas import DataFrame
 
-from src.RNASuiteUtil import BufferedProgramObject, ProgramObject
+from src.RNASuiteUtil import BufferedProgramObject, ProgramObject, run_command_line
 from src.util import (path_string, validate_arg, parse_file_input,
                       DiscontinuousRange, input_range, validate_doesnt_throw)
 from src.RNAUtil import CT_to_sscount_df
@@ -180,4 +181,4 @@ def run(args="", from_command_line = True):
 
 if __name__ == "__main__":
     #if we succeed somehow (throught pythonpath, etc)...
-    run(sys.argv[1:])
+    run_command_line(run, sys.argv[1:])

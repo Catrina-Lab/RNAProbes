@@ -1,4 +1,4 @@
-import sys
+from __future__ import annotations
 from pathlib import Path
 from unittest import TestCase
 from pinmol import run
@@ -8,10 +8,18 @@ import shlex
 class Test(TestCase):
     def test_program(self):
         output_file = Path(__file__).parent.parent.parent / "Temp_files" / "example_large.ct"
-        #run(shlex.split(fr'-p 20 -f "{output_file}" --start 1 --end -1 -pc 50 -w -nb'))
+        run(shlex.split(fr'-p 20 -f "{output_file}" --start 1 --end -1 -pc 50 -w -nb'))
         path = Path(output_file)
         output_dir = path.parent
         verify_program_data(self, path.stem, output_dir=output_dir, reference_dir=output_dir / "pinmol_files" / "expected_pinmol_large_all_stable",
+                            svg_files_output_dir=pinmol.svg_dir_name, svg_files_reference_dir="")
+
+    def test_blast_program(self):
+        output_dir = Path(__file__).parent.parent.parent / "Temp_files"
+        output_file = output_dir / "example_large.ct"
+        run(shlex.split(fr'-p 20 -f "{output_file}" --start 1 --end -1 -pc 50 -w -n -bf "{output_dir / "example_large_Alignment.xml"}"'))
+        path = Path(output_file)
+        verify_program_data(self, path.stem, output_dir=output_dir, reference_dir=output_dir / "pinmol_files" / "example_large_blast_stable",
                             svg_files_output_dir=pinmol.svg_dir_name, svg_files_reference_dir="")
 
 def verify_program_data(tester: TestCase, file_stem: str, output_dir: Path, reference_dir: Path, svg_max = 50, svg_files_output_dir: str = "", svg_files_reference_dir: str = None):
