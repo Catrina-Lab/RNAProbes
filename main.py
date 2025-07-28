@@ -29,6 +29,9 @@ def send_error_response(error: Exception, **kwargs):
     else:
         return str(error), 500
 
+@app.errorhandler(500)
+def application_error(error):
+    return str(error), 500
 
 class Program:
     def _get_args(self, request, job_id, error_message: str="Something went wrong"):
@@ -57,7 +60,7 @@ class Program:
             modified_kwargs = self._validate_args(kwargs, validate_err_msg)
             result = self._run_program(kwargs | modified_kwargs, runtime_err_msg, validate_err_msg=validate_err_msg)
             return self._get_response(result, **kwargs)
-        except Exception as e:
+        except BaseException as e:
             return send_error_response(e, **kwargs)
         finally:
             if self._run_finally is not None: self._run_finally(**kwargs)
@@ -117,7 +120,7 @@ def get_zip_bytes(filename: str, **kwargs) -> bytes:
     file_obj.seek(0)
     return file_obj.getvalue()
 
-def get_result_temp(program: str, result: str):
+def get_result_temp(program: str, result: str, **kwargs):
     zip_file = get_zip_bytes("tempfile", **{program: (".txt", result)})
     zip_file_encoded = base64.b64encode(zip_file).decode("utf-8")
     filename = f"TempResult-{program}.zip"
@@ -142,7 +145,7 @@ program_dict = { #get args, validate args, return value
                                                                         f"{optional_argument(req, 'pinmol-end-base', '-e', default_value=-1)}",
                                                                         from_command_line=False)
     }, pinmol.validate_arguments, partial(close_file, pinmol.calculate_result), run_finally=delete_folder_tree),
-    'smfish': Program("smFISH", lambda x: {"x": "test"}, lambda x: True, lambda x: x, partial(get_result_temp, "smFISH"))
+    'smfish': Program("smFISH", lambda req, id: {"x": "test"}, lambda x: dict(), lambda x: x, partial(get_result_temp, "smFISH"))
 }
 
 @app.route('/')
