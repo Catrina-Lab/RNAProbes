@@ -1,7 +1,11 @@
 <div class="request-recieved card shadow-sm mb-4">
   <div class="card-body">
     <h5 class="card-title text-primary"><i class="fas fa-cogs me-2"></i>{{ program }}</h5>
-    <p class="card-text">Your request is being processed. You will be notified when the results are ready.</p>
+    {% if delayed is defined %}
+      <p class="card-text">Your request is being processed, but might take a while. You will be notified when the results are ready. Make sure to download them within 24h.</p>
+    {% else %}
+      <p class="card-text">Your request is being processed. You will be notified when the results are ready.</p>
+    {% endif %}
     <div class="d-flex align-items-center">
       <strong>Status:</strong>
       <div class="spinner-border spinner-border-sm ms-2" role="status">

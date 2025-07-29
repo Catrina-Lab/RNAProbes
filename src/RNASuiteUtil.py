@@ -11,7 +11,7 @@ from pathlib import Path
 import io
 
 from src import util
-from src.util import remove_if_exists, ValidationError, safe_remove_tree
+from src.util import remove_if_exists, ValidationError, safe_remove_tree, is_empty
 
 
 def run_command_line(run: Callable, *args, **kwargs):
@@ -59,7 +59,7 @@ class FileManager:
                 remove_if_exists(file)
 
         for directory in directories:
-            if directory.exists() and not any(directory.iterdir()): #directory is empty
+            if directory.exists() and is_empty(directory): #directory is empty
                 safe_remove_tree(directory, self.output_dir)
 
 class ProgramObject:

@@ -84,6 +84,10 @@ def remove_if_exists(path: Path):
     if path.exists():
         os.remove(path)
 
+def is_empty(directory: Path):
+    if not directory.is_dir(): raise ValueError(f"Input must be an existing directory. {str(directory)} either is not a directory or does not exist")
+    return not any(directory.iterdir())
+
 def validate_doesnt_throw(func: Callable, *input, msg="", **kwargs):
     try:
         return func(*input, **kwargs)

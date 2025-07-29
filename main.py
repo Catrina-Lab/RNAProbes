@@ -6,6 +6,9 @@ from collections.abc import Callable
 from flask import Flask, render_template, request, redirect, url_for, jsonify, Response
 from sys import argv
 
+from DelayedProgram import DelayedProgram, result_dir_name
+from Program import Program
+
 from src.RNASuiteUtil import ProgramObject
 from src.TFOFinder import tfofinder
 from src.PinMol import pinmol
@@ -23,70 +26,9 @@ output_dir = root / "user-files"
 pinmol_output_dir, sm_fish_output_dir = output_dir / "pinmol", output_dir / "smfish"
 
 
-def send_error_response(error: Exception, **kwargs):
-    if isinstance(error, ValidationError):
-        return str(error), 400
-    else:
-        return str(error), 500
-
 @app.errorhandler(500)
 def application_error(error):
     return str(error), 500
-
-class Program:
-    def _get_args(self, request, job_id, error_message: str="Something went wrong"):
-        try:
-            return self._get_args_raw(request, job_id)
-        except Exception as e:
-            raise ValidationError(f"{error_message}: {str(e)}") from e
-
-    def _validate_args(self, kwargs: dict, error_message: str="Something went wrong") -> dict:
-        try:
-            return self._validate_args_raw(**kwargs) or dict()
-        except Exception as e:
-            raise ValidationError(f"{error_message}: {str(e)}") from e
-
-    def _run_program(self, kwargs: dict, error_message: str="Something went wrong", validate_err_msg: str=None):
-        try:
-            return self._run_program_raw(**kwargs)
-        except ValidationError as e:
-            raise ValidationError(f"{validate_err_msg or error_message}: {str(e)}") from e
-        except Exception as e:
-            raise Exception(f"{error_message}: {str(e)}") from e
-
-    def run(self, kwargs: dict, validate_err_msg: str, runtime_err_msg: str) -> Response | tuple[str, int]:
-        try:
-            kwargs = self._get_args(request, uuid.uuid4())
-            modified_kwargs = self._validate_args(kwargs, validate_err_msg)
-            result = self._run_program(kwargs | modified_kwargs, runtime_err_msg, validate_err_msg=validate_err_msg)
-            return self._get_response(result, **kwargs)
-        except BaseException as e:
-            return send_error_response(e, **kwargs)
-        finally:
-            if self._run_finally is not None: self._run_finally(**kwargs)
-
-    def __init__ (self, name: str, get_args: Callable, validate_args: Callable, run_program: Callable, get_response: Callable = None, run_finally: Callable = None):
-        """
-        Create a Program object
-        :param get_args: Get all the args needed for validating and running the program. If some are not needed in validate or run_program,
-        add **ignore to the function signature
-        :param validate_args: the function ran to make sure that all the arguments are valid
-        :param run_program: run the program itself, returning a result
-        :param get_response: create a valid flask response from the program's response
-        :param run_finally: an optional argument to run any needed cleanup after running the program (e.g. file deletion)
-        """
-        self.name = name
-        self._get_args_raw = get_args
-        self._validate_args_raw = validate_args
-        self._run_program_raw = run_program
-        self._run_finally = run_finally
-        self._get_response = get_response or self._get_response_default #temporary, while there still are temp methods
-
-    def _get_response_default(self, result: ProgramObject, **kwargs) -> Response:
-        zip_bytes, zipfile_name = result.to_zip(f"{self.name}ResultsFor-[fname].zip")
-        zip_file_encoded = base64.b64encode(zip_bytes).decode("utf-8")
-        return jsonify(zip=zip_file_encoded, html=render_template(
-            'request-completed.html', program=self.name, filename=zipfile_name))
 
 def close_file(func: Callable, *, file_arg_name: str = "filein", **kwargs):
     """
@@ -120,32 +62,29 @@ def get_zip_bytes(filename: str, **kwargs) -> bytes:
     file_obj.seek(0)
     return file_obj.getvalue()
 
-def get_result_temp(program: str, result: str, **kwargs):
+def get_result_temp(program: str, result: str, **kwargs) -> tuple[bytes, str]:
     zip_file = get_zip_bytes("tempfile", **{program: (".txt", result)})
-    zip_file_encoded = base64.b64encode(zip_file).decode("utf-8")
     filename = f"TempResult-{program}.zip"
-    return jsonify(zip=zip_file_encoded, html=render_template(
-        'request-completed.html', result=result, program = program, filename=filename))
+    return zip_file, filename
 
 program_dict = { #get args, validate args, return value
     'tfofinder': Program("TFOFinder",
-                        lambda req, _: {"filein": req.files.get("ct-file").stream,
-                                      "probe_lengths": req.form.get("tfofinder-probe-length"), #validation is in validate_arguments
-                                      "filename": secure_filename(req.files.get("ct-file").filename),
-                                         "arguments": tfofinder.parse_arguments("", from_command_line=False)},
+                        lambda req, _: dict(filein = req.files.get("ct-file").stream,
+                                      probe_lengths = req.form.get("tfofinder-probe-length"), #validation is in validate_arguments
+                                      filename = secure_filename(req.files.get("ct-file").filename),
+                                         arguments = tfofinder.parse_arguments("", from_command_line=False)),
                 tfofinder.validate_arguments,
                   partial(close_file, tfofinder.calculate_result)), #temp functions
-    'pinmol': Program("PinMol", lambda req, id: {"filein": req.files.get("ct-file").stream,
-                                   "probe_length": req.form.get("pinmol-probe-length", type=int),
-                                   "output_dir": pinmol_output_dir / str(id),
-                                   "filename": secure_filename(req.files.get("ct-file").filename),
-                                   "probe_count_max": optional_argument(req, "pinmol-probe-count-max", default_value=50, type=int),
-                                    "arguments": pinmol.parse_arguments(f"-nb -w"
+    'pinmol': Program("PinMol", lambda req, output_dir: dict(filein= req.files.get("ct-file").stream,
+                                   probe_length = req.form.get("pinmol-probe-length", type=int),
+                                   output_dir = output_dir,
+                                   filename = secure_filename(req.files.get("ct-file").filename),
+                                    arguments = pinmol.parse_arguments(f"-nb -w"
                                                                         f"{optional_argument(req, 'pinmol-start-base', '-s', default_value=1)}"
                                                                         f"{optional_argument(req, 'pinmol-end-base', '-e', default_value=-1)}",
                                                                         from_command_line=False)
-    }, pinmol.validate_arguments, partial(close_file, pinmol.calculate_result), run_finally=delete_folder_tree),
-    'smfish': Program("smFISH", lambda req, id: {"x": "test"}, lambda x: dict(), lambda x: x, partial(get_result_temp, "smFISH"))
+), pinmol.validate_arguments, partial(close_file, pinmol.calculate_result), output_dir=pinmol_output_dir, run_finally=delete_folder_tree),
+    'smfish': DelayedProgram("smFISH", lambda req, id: {"x": "test"}, lambda x: dict(), lambda x: x, partial(get_result_temp, "smFISH"), output_dir=sm_fish_output_dir)
 }
 
 @app.route('/')
@@ -168,6 +107,17 @@ def send_request():
     program = request.args.get("program")
     return run_program(program, "The given arguments are invalid",
                          "Something went wrong when calculating your result")
+
+@app.route('/query-result', methods=['GET'])
+def query_result():
+    program_name = request.args.get("program")
+    id = request.args.get("id")
+    program = program_dict[program_name.lower()]
+    output_dir = program.output_dir / id / result_dir_name
+    if isinstance(program, DelayedProgram):
+        return program.get_current_result(output_dir, id)
+    else:
+        return f"Can only query a DelayedProgram. {program_name} is not a DelayedProgram", 400
 
 def get_exports():
     return {"TFOFinder": tfofinder.exported_values, "PinMol": pinmol.exported_values}

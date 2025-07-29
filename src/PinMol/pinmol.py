@@ -40,16 +40,14 @@ copyright_msg = (("\n" * 6) +
 match = ["ENERGY", "dG"]  # find header rows in ct file
 
 
-def validate_arguments(probe_length: int, filename, probe_count_max: int, arguments: Namespace, **ignore) -> dict:
+def validate_arguments(probe_length: int, filename, arguments: Namespace, **ignore) -> dict:
     validate_arg(parse_file_input(filename).suffix == ".ct", "The given file must be a valid .ct file")
     validate_range_arg(probe_length, probeMin, probeMax + 1, "probe length")
-    validate_range_arg(probe_count_max, probesToSaveMin, probesToSaveMax + 1, "probe count")
     validate_range_arg(arguments.start, min=1, name="start base")
     validate_range_arg(arguments.end, min=arguments.start + probe_length, name="end base", extra_predicate=lambda x: x == -1)
     return {}
 
-def calculate_result(filein, probe_length: int, filename: str,
-                     probe_count_max: int, arguments: Namespace, output_dir: Path = None):
+def calculate_result(filein, probe_length: int, filename: str, arguments: Namespace, output_dir: Path = None):
     output, stem, _ =  parse_file_input(filename, output_dir)
     program_object = ProgramObject(output, stem, arguments, file_name = filename, probe_length=probe_length)
     with filein as file:
@@ -59,14 +57,14 @@ def calculate_result(filein, probe_length: int, filename: str,
     GC_probes = get_GC_probes(sscount_df, probe_length, structure_count, program_object=program_object)
     read_oligosc = oligoscreen(GC_probes["Probe Sequence"], program_object)
     # new file with only sequences of probes for calculating free energies using oligoscreen
-    DG_probes = get_DG_probes(probe_count_max, GC_probes, read_oligosc, program_object, should_print=should_print(arguments, True))
+    DG_probes = get_DG_probes(GC_probes, read_oligosc, program_object)
 
     # write the fasta file containing the final sequences for blast
     save_to_fasta(DG_probes["Probe Sequence"], program_object)
-    probes_sorted = try_run_blast(DG_probes, probe_length, program_object)
+    DG_probes_sorted = try_run_blast(DG_probes, probe_length, program_object)
 
     
-    calculate_beacons(probes_sorted[["Base Number", "Probe Sequence"]].copy(), probe_length, program_object)
+    calculate_beacons(DG_probes_sorted[["Base Number", "Probe Sequence"]].copy(), probe_length, program_object)
 
     write_result_string(program_object, arguments=arguments)
     return program_object
@@ -181,7 +179,7 @@ def oligoscreen(probes: pd.Series, program_object: ProgramObject) -> DataFrame:
     return RNAStructureWrapper.oligoscreen(probes, "[fname]", program_object.file_path)
 
 
-def get_DG_probes(no_pb: int, GC_probes: DataFrame, read_oligosc: DataFrame,  program_object: ProgramObject, should_print: bool=False) -> DataFrame:  #how many probes should be retained; limited to range [2, 50]
+def get_DG_probes(GC_probes: DataFrame, read_oligosc: DataFrame,  program_object: ProgramObject) -> DataFrame:  #how many probes should be retained; limited to range [2, 50]
     # no need to exit, just use this as a max...
     # if no_pb > int(tg_end - tg_start):
     #     print("This number is too large! You cannot enter a number larger then "+ str(tg_end-tg_start)+ " !")
@@ -189,9 +187,10 @@ def get_DG_probes(no_pb: int, GC_probes: DataFrame, read_oligosc: DataFrame,  pr
     # else:
     data_sorted = get_data_sorted(GC_probes, read_oligosc, program_object)
     row_no = len(data_sorted)
-    if no_pb > row_no and should_print: print("Only "+str(row_no)+" meet the criteria.  Instead of "+ str(no_pb)+", " + str(row_no)+ " probe(s) will be considered")
 
-    DG_probes = data_sorted[:no_pb] #limit the length of the list
+    if probesToSaveMax > row_no and should_print(program_object, True): print("Only "+str(row_no)+" meet the criteria.  Instead of "+ str(probesToSaveMax)+", " + str(row_no)+ " probe(s) will be considered")
+
+    DG_probes = data_sorted[:probesToSaveMax + 1] #limit the length of the list
     DG_probes.to_csv(program_object.save_buffer("[fname]_DG_probes.csv"), index=False)
 
     program_object.set_result_args(len_DG_probes = len(DG_probes), max_valid_probes = row_no)
@@ -420,10 +419,6 @@ def create_arg_parser():
     parser.add_argument("-e", "--end", type=int,
                         help="The start base to look for probs, must be greater than start (use -1 for the entire sequence)")
     parser.add_argument("-bf", "--blast-file", type=functools.partial(path_arg, suffix=".xml"))
-    parser.add_argument("-pc", "--probe-count-max",
-                        type=functools.partial(bounded_int, min=probesToSaveMin, max=probesToSaveMax),
-                        metavar=f"[{probesToSaveMin}-{probesToSaveMax}]",
-                        help=f'The maximum amount of probes to save, {probesToSaveMin}-{probesToSaveMax} inclusive')
 
     arg_group = parser.add_argument_group('Blast Alignment',
                                           'Blast alignment command line settings. If none given, will ask')
@@ -439,7 +434,8 @@ def parse_arguments(args: list | str, from_command_line = True):
     args.from_command_line = from_command_line  # denotes that this is from the command line
     return args
 
-def should_print(arguments: Namespace, is_content_verbose: bool = False):
+def should_print(arguments: Namespace | ProgramObject, is_content_verbose: bool = False):
+    if isinstance(arguments, ProgramObject): arguments = arguments.arguments
     return arguments and arguments.from_command_line and not arguments.quiet and (not is_content_verbose or arguments.verbose)
 
 def run(args: str | list="", from_command_line: bool = True):
@@ -450,13 +446,8 @@ def run(args: str | list="", from_command_line: bool = True):
     probe_length = arguments.probes or input_int_in_range(min=probeMin, max=probeMax + 1,
                                                           msg=f"Enter the length of a probe; a number between {probeMin} and {probeMax} inclusive: ",
                                                           fail_message=f'You must type a number between {probeMin} and {probeMax}, try again: ')
-    # get probes within a slice with a %GC >? 30 and < 56
-    # keep only probes that meet the energy requirements and sort them
-    probe_count_max = input_int_in_range(min=probesToSaveMin, max=probesToSaveMax + 1,
-                                         initial_value=arguments.probe_count_max,
-                                         msg=f"How many probes do you want to save (at max)? Please enter a number between {probesToSaveMin} and {probesToSaveMax}: ",
-                                         fail_message=f'You must type a number between {probesToSaveMin} and {probesToSaveMax}, try again: ')
-    calculate_result(open(file_name, "r"), probe_length, file_name, probe_count_max, arguments, arguments.output_dir)
+
+    calculate_result(open(file_name, "r"), probe_length, file_name, arguments, arguments.output_dir)
 
     if should_print(arguments):
         print("\n" + "This information can be also be found in the file Final_molecular_beacons.csv" + "\n")

@@ -72,7 +72,6 @@
 
   document.addEventListener('click', e => {
     const downloadBtn = e.target.closest('[id$="-download-btn"]');
-    console.log(downloadBtn);
     if (downloadBtn) {
       const program = downloadBtn.id.split("-", 1)[0];
       downloadFile(program);
@@ -90,11 +89,15 @@
       method: "POST",
       body: data,
     });
+    handleResponse(program, response);
+  }
+  async function handleResponse(program, response, isRecur = false){
     if(response.status >= 400  && response.status < 600){
       return handleError(program, response, await response.text())
     } else {
       const responseJson = await response.json();
-      renderResponse(responseJson, program);
+      if(responseJson.status == "running") renderDelayedResponse(program, responseJson, isRecur);
+      else renderResponse(program, responseJson);
     }
   }
   async function handleError(program, response, text){
@@ -109,12 +112,12 @@
     programResponseContainer.querySelector(".failed-message").textContent = text;
   }
 
-  function renderResponse(response, program) {
-    saveURL(response.zip, program);
-    renderSuccessTemplate(response.html, program);
+  function renderResponse(program, response) {
+    saveURL(program, response.zip);
+    renderRecievedTemplate(program, response.html);
   }
 
-  function saveURL(zip, program) {
+  function saveURL(program, zip) {
     const zipFile = new Blob([base64ToUint8Array(zip)], { type: 'application/zip' });
     resultUrls[program] = URL.createObjectURL(zipFile);
   }
@@ -128,7 +131,7 @@
     return bytes;
   }
 
-  function renderSuccessTemplate(html, program) {
+  function renderRecievedTemplate(program, html) {
     programResponseContainer = document.getElementById(`${program}-response-container`);
     requestRecieved = programResponseContainer.querySelector(".request-recieved");
     requestRecieved.classList.add("d-none");
@@ -141,6 +144,26 @@
       anchor.href = resultUrls[program];
       anchor.click();
     }
+  }
+
+  async function renderDelayedResponse(program, responseJSON, isRecur = false){
+    if(!isRecur) {
+      renderRecievedTemplate(program, responseJSON.html);
+      await sleep(250); //wait a little bit in for a failed program to be able to run
+    } else await sleep(2 * 1000);
+    queryResponse(program, responseJSON.id);
+  }
+
+  function sleep(ms) {
+    return new Promise(resolve => setTimeout(resolve, ms));
+  }
+  async function queryResponse(program, id){
+    response = await sendQuery(program, id);
+    handleResponse(program, response, true);
+  }
+
+  async function sendQuery(program, id){
+    return await fetch(`/query-result?program=${program}&id=${id}`)
   }
 </script>
 {% endblock %}
