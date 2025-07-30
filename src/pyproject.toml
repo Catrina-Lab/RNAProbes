@@ -1,0 +1,14 @@
+[project]
+name = "RNAProbesSrc"
+description = "Files for modeling RNA Probes"
+authors = [
+    {name = "Irina Catrina"},
+    {name = "Avi Kohn"},
+]
+requires-python = ">= 3.9" # At least Python 3.9, may be able to do lower
+readme = "README.md"
+dependencies = [
+    "Bio",
+    "pandas"
+]
+license = "GPL-3.0-or-later"

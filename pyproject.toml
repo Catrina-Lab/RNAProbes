@@ -1,0 +1,19 @@
+[project]
+name = "RNAProbes"
+description = "Webserver for modeling RNA Probes"
+authors = [
+    {name = "Irina Catrina"},
+    {name = "Avi Kohn"},
+]
+requires-python = ">= 3.9" # At least Python 3.9
+readme = "README.md"
+version = "0.0.1"
+dependencies = [
+    "flask",
+    "Bio",
+    "pandas"
+]
+license = "GPL-3.0-or-later"
+
+[tool.poetry]
+package-mode = false

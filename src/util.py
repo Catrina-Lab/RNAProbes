@@ -1,6 +1,7 @@
 # A collection of utility methods and classes that can be useful in other projects as well
 from __future__ import annotations
 import io
+import re
 import shutil
 import zipfile
 from collections import namedtuple
@@ -49,11 +50,12 @@ class DiscontinuousRange:
     def __repr__(self):
         return f"DiscontinuousRange({str(self)})"
 
-def input_value(msg : str, mapper: type[any] = int, predicate = lambda n: True, fail_message : str = None, initial_value = None, retry_if_fail=True):
+def input_value(msg : str, mapper: type[any] = int, predicate = lambda n: True, fail_message : str = None, initial_value = None, retry_if_fail=True, map_initial_value = False):
     fail_message = fail_message or msg
     while True:
         try:
-            x = initial_value or mapper(input(msg))
+            if map_initial_value and initial_value is not None: initial_value = mapper(initial_value)
+            x = initial_value if initial_value is not None else mapper(input(msg))
             initial_value = None
             if not predicate(x):
                 raise ValueError()
@@ -75,6 +77,21 @@ def input_range(min: int = None, max: int = None, msg : str = None, fail_message
     msg = msg or f"Input a range contained between {min} (inclusive) and {max} (exclusive): "
     return input_value(msg, mapper=DiscontinuousRange.template(min_value=min, max_value=max), initial_value=initial_value,
                        fail_message = fail_message, retry_if_fail=retry_if_fail)
+
+def input_bool(true_vals: str | list[str] = "y,yes,true,t", false_vals: str | list[str] = "n,no,false,f", msg : str = None, fail_message : str = None,
+                       initial_value = None, retry_if_fail=True, map_initial_value=True) -> bool:
+    fail_message = fail_message or f"Please input a valid boolean (y/n, True/False, etc.)"
+    msg = msg or f"Input a valid boolean (y/n, True/False, etc.)"
+    true_vals = true_vals if isinstance(true_vals, list) else re.split(",\\s*", true_vals)
+    false_vals = false_vals if isinstance(false_vals, list) else re.split(",\\s*", false_vals)
+    def matches(string: str):
+        string = string.strip().lower()
+        if string in true_vals: return True
+        if string in false_vals: return False
+        raise ValueError(f"String must be one of {true_vals} or {false_vals}")
+    return input_value(msg, mapper=matches, initial_value=initial_value,
+                       fail_message = fail_message, retry_if_fail=retry_if_fail, predicate=lambda x: isinstance(x, bool), map_initial_value=True)
+
 
 def remove_files(*files):
     for file in files:

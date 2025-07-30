@@ -71,7 +71,7 @@ def calculate_result(filein, probe_length: int, filename: str, arguments: Namesp
 
 def write_result_string(program_object: ProgramObject, arguments: Namespace):
     result_str = get_result_string(program_object.result_obj)
-    with open(program_object.save_buffer(f"[fname]_Final_molecular_beacons.csv"), 'a') as add_output:
+    with program_object.open_buffer(f"[fname]_Final_molecular_beacons.csv", "a") as add_output:
         add_output.write(result_str)
     if should_print(arguments):
         print(result_str)
@@ -190,7 +190,7 @@ def get_DG_probes(GC_probes: DataFrame, read_oligosc: DataFrame,  program_object
 
     if probesToSaveMax > row_no and should_print(program_object, True): print("Only "+str(row_no)+" meet the criteria.  Instead of "+ str(probesToSaveMax)+", " + str(row_no)+ " probe(s) will be considered")
 
-    DG_probes = data_sorted[:probesToSaveMax + 1] #limit the length of the list
+    DG_probes = data_sorted[:probesToSaveMax] #limit the length of the list
     DG_probes.to_csv(program_object.save_buffer("[fname]_DG_probes.csv"), index=False)
 
     program_object.set_result_args(len_DG_probes = len(DG_probes), max_valid_probes = row_no)
@@ -212,7 +212,7 @@ def get_data_sorted(GC_probes: DataFrame, read_oligosc: DataFrame, program_objec
     return data_sorted
 
 def save_to_fasta(probes: pd.Series, program_object: ProgramObject) -> None:
-    with open(program_object.save_buffer("[fname]_blast_picks.fasta"),'w') as f1:
+    with program_object.open_buffer("[fname]_blast_picks.fasta", 'w') as f1:
         output_str = ">\n" + "\n>\n".join(probes)
         f1.write(output_str)
 
@@ -284,115 +284,133 @@ def validate_xml_file(pick: int, first_query: str, last_query: str, DG_probes: D
     program_object.validate(first_query == first_probe, "Blast file invalid: the first query is not the same as the first sequence in the blast_picks.fasta file")  # check if the correct file was used for blast
     program_object.validate(last_query in last_probe, "Blast file invalid: the last query is not contained in the last sequence in the blast_picks.fasta file")  # check if the correct file was used for blast
 
+
 def calculate_beacons(mb_pick: DataFrame, probe_length: int, program_object: ProgramObject):
     #todo: is it verbose?
     program_object.create_dir(svg_dir_name)  # make sure the directory exists
+    initialize_molecular_beacon_file(program_object)
+
+    for i in range(len(mb_pick)):  # remove results that are highly structured
+        beacon = design_beacon(mb_pick, i, probe_length, program_object)
+        has_svg = try_create_svg(i, program_object)
+        save_beacon(i, mb_pick, beacon, program_object, has_svg=has_svg)
+
+def initialize_molecular_beacon_file(program_object):
     if program_object.get_arg("overwrite"):
         program_object.reset_buffer(f"[fname]_Final_molecular_beacons.csv")
-    i = stemDesign(mb_pick, probe_length, program_object,
-                   should_print(program_object.arguments, is_content_verbose=False))  # design the stem for the molecular beacon
 
-    for j in range(1, int(i) + 1):  # remove results that are highly structured
-        seq_path, ct_path, svg_path = [f"{svg_dir_name}/[fname]_{str(j)}.seq", f"{svg_dir_name}/[fname]_{str(j)}.ct", f"{svg_dir_name}/[fname]_{str(j)}.svg"]
-        RNAStructureWrapper.fold(seq_path, ct_path, program_object.file_path, remove_seq=True)
-        ct_file = program_object.file_path(ct_path)
-        with open(ct_file, 'r') as gin:
-            linesa = gin.readlines()
-            egdraw = float(linesa[0][16:20])
-            no_bs = int(linesa[0][3:5])
-            paired = int(linesa[1][23:26])
-            skip_svg = egdraw < -7.2 or egdraw > -2.5 or no_bs != paired
+    with program_object.open_buffer(f"[fname]_Final_molecular_beacons.csv", "a") as file:
+        file.write('Beacons marked with a "*" are too structured or show a high degree of self-complementarity, and therefore have no svg file.\n')
 
-        if not skip_svg:
-            RNAStructureWrapper.draw(ct_path, svg_path, program_object.file_path, arguments="--svg -n 1")
-            program_object.register_file(svg_path, register_to_delete=True)
-        remove_files(ct_file)
+def design_beacon(mb_picks: DataFrame, index: int, probe_length: int, program_object: ProgramObject): #design the stem of the final probes
+    baseNum = mb_picks["Base Number"][index]
+    probe_seq = mb_picks["Probe Sequence"][index]
 
-def stemDesign(mb_picks: DataFrame, probe_length: int, program_object: ProgramObject, should_print = False): #design the stem of the final probes
-    bs_ps = mb_picks["Base Number"]
-    fseq = mb_picks["Probe Sequence"]
+    stem = get_stem(probe_seq, probe_length)
+    stemr = reverse_complement(stem)
 
-    for i, probe_seq in fseq.items():
-        seql = list(probe_seq)
-        seq_slc0 = seql[0:probe_length+1]
-        seq_slc = list(itersplit_into_x_chunks(seq_slc0, 4, end=probe_length+1))
+    beacon = stem + probe_seq + stemr
+    with open(program_object.file_path(f"{svg_dir_name}/[fname]_{str(index+1)}.seq"), 'w') as seqfile:
+        seqfile.write(f';\n{index+1} at base # {baseNum} molecular beacon\n{beacon}1')
+    return beacon
 
-        first_complement = seql[0].translate(basecomplement)
-        second_complement = seql[1].translate(basecomplement)
-        third_complement = seql[2].translate(basecomplement)
+def get_stem(probe_seq: str, probe_length: int):
+    seql = list(probe_seq)
+    seq_slc0 = seql[:probe_length+1]
+    seq_slc = list(itersplit_into_x_chunks(seq_slc0, 4, end=probe_length+1))
 
-        stem13 = ['U', 'U', 'G', 'C']
-        stem14 = ['G', 'U', 'G', 'U']
-        stem15 = ['G', 'C', 'G', 'G']
+    first_complement = seql[0].translate(basecomplement)
+    second_complement = seql[1].translate(basecomplement)
+    third_complement = seql[2].translate(basecomplement)
 
-        slco1 = []
-        slco2 = []
-        slco3 = []
-        for slt in 'CU':
-            for slz in 'UC':
-                X = slt
-                Y = slz
-                stem1 = [X, 'U', Y, 'G']
-                stem2 = ['G', X, 'U', Y]
-                stem3 = ['G', 'A', 'G', X]
-                stem4 = [X, 'G', 'A', 'G']
+    stem13 = ['U', 'U', 'G', 'C']
+    stem14 = ['G', 'U', 'G', 'U']
+    stem15 = ['G', 'C', 'G', 'G']
 
-                stem5 = ['G', 'U', X, 'G']
-                stem6 = [X, 'G', 'U', Y]
-                stem7 = ['G', 'A', X, 'G']
-                stem8 = [X, 'G', 'A', Y]
+    slco1 = []
+    slco2 = []
+    slco3 = []
+    for slt in 'CU':
+        for slz in 'UC':
+            X = slt
+            Y = slz
+            stem1 = [X, 'U', Y, 'G']
+            stem2 = ['G', X, 'U', Y]
+            stem3 = ['G', 'A', 'G', X]
+            stem4 = [X, 'G', 'A', 'G']
 
-                stem9 = [X, 'U', 'G', Y]
-                stem10 = ['G', X, 'U', 'G']
-                stem11 = [X, 'A', 'G', Y]
-                stem12 = ['G', X, 'A', 'G']
+            stem5 = ['G', 'U', X, 'G']
+            stem6 = [X, 'G', 'U', Y]
+            stem7 = ['G', 'A', X, 'G']
+            stem8 = [X, 'G', 'A', Y]
 
-                slco1.extend([stem1, stem2, stem3, stem4])
-                slco2.extend([stem5, stem6, stem7, stem8])
-                slco3.extend([stem9, stem10, stem11, stem12])
+            stem9 = [X, 'U', 'G', Y]
+            stem10 = ['G', X, 'U', 'G']
+            stem11 = [X, 'A', 'G', Y]
+            stem12 = ['G', X, 'A', 'G']
 
-        #~first 3 = last 3
-        if  first_complement == seql[-1] and second_complement == seql[-2]:
-            stem = 'GG' if third_complement == seql[-3] else 'CCG'
+            slco1.extend([stem1, stem2, stem3, stem4])
+            slco2.extend([stem5, stem6, stem7, stem8])
+            slco3.extend([stem9, stem10, stem11, stem12])
 
-        elif seql[0] == 'U' and seql[-1] == 'A':
-            stem = 'CCGG' if stem15 in seq_slc else 'GCCG'
+    #~first 3 = last 3
+    if  first_complement == seql[-1] and second_complement == seql[-2]:
+        return 'GG' if third_complement == seql[-3] else 'CCG'
 
-        elif seql[0] == 'A' and seql[-1] == 'U':
-            stem = 'CGCC'
+    elif seql[0] == 'U' and seql[-1] == 'A':
+        return 'CCGG' if stem15 in seq_slc else 'GCCG'
 
-        elif seql[-1] == first_complement and seql[0] in ['C', 'G']:
-            stem = 'CGAG'
+    elif seql[0] == 'A' and seql[-1] == 'U':
+        return 'CGCC'
+
+    elif seql[-1] == first_complement and seql[0] in ['C', 'G']:
+        return 'CGAG'
 
 
-        elif seql[0] == 'U' and seql[-1] == 'G' and stem13 not in seq_slc:
-            stem = 'CGCGA'
+    elif seql[0] == 'U' and seql[-1] == 'G' and stem13 not in seq_slc:
+        return 'CGCGA'
 
-        elif seql[0] == 'G' and seql[-1] == 'U':
-            stem = 'CGCGA'
+    elif seql[0] == 'G' and seql[-1] == 'U':
+        return 'CGCGA'
 
-        elif any(s in seq_slc for s in slco3) and stem14 not in seq_slc:
-            stem = 'GCACG'
+    elif any(s in seq_slc for s in slco3) and stem14 not in seq_slc:
+        return 'GCACG'
 
-        elif any(s in seq_slc for s in slco1)and stem14 not in seq_slc:
-            stem = 'CGACG'
+    elif any(s in seq_slc for s in slco1)and stem14 not in seq_slc:
+        return 'CGACG'
 
-        elif any(s in seq_slc for s in slco2) and stem14 not in seq_slc:
-            stem = 'GCAGC'
+    elif any(s in seq_slc for s in slco2) and stem14 not in seq_slc:
+        return 'GCAGC'
 
-        else:
-            stem = 'CGAGC'
+    else:
+        return 'CGAGC'
 
+def try_create_svg(index: int, program_object: ProgramObject) -> bool:
+    seq_path, ct_path, svg_path = [f"{svg_dir_name}/[fname]_{str(index+1)}.seq", f"{svg_dir_name}/[fname]_{str(index+1)}.ct",
+                                   f"{svg_dir_name}/[fname]_{str(index+1)}.svg"]
+    RNAStructureWrapper.fold(seq_path, ct_path, program_object.file_path, remove_input=True)
+    ct_file = program_object.file_path(ct_path)
+    with open(ct_file, 'r') as gin:
+        linesa = gin.readlines()
+        egdraw = float(linesa[0][16:20])
+        no_bs = int(linesa[0][3:5])
+        paired = int(linesa[1][23:26])
+        create_svg = -7.2 <= egdraw <= -2.5 and no_bs == paired
 
-        stemr = reverse_complement(stem)
-        beacon = stem + probe_seq + stemr
-        aseq = f"{i+1} MB sequence at base number {bs_ps[i]} is:  {beacon}"
-        if should_print: print(aseq + '\n')
-        with open(program_object.save_buffer("[fname]_Final_molecular_beacons.csv"), 'a') as outputf:
-            outputf.write(aseq+'\n')
-        with open(program_object.file_path(f"{svg_dir_name}/[fname]_{str(i+1)}.seq"), 'w') as seqfile:
-            seqfile.write(f';\n{i+1} at base # {bs_ps[i]} molecular beacon\n{beacon}1')
-    return len(fseq)
+    if create_svg:
+        RNAStructureWrapper.draw(ct_path, svg_path, program_object.file_path, arguments="--svg -n 1")
+        program_object.register_file(svg_path, register_to_delete=True)
+    remove_files(ct_file)
+
+    return create_svg
+
+def save_beacon(index: int, mb_picks: DataFrame, beacon: str, program_object: ProgramObject, has_svg: bool = True):
+    baseNum = mb_picks["Base Number"][index]
+
+    aseq = f"{'' if has_svg else '*'}{index + 1} MB sequence at base number {baseNum} is:  {beacon}"
+    if should_print(program_object): print(aseq + '\n')
+    with program_object.open_buffer(f"[fname]_Final_molecular_beacons.csv", "a") as outputf:
+        outputf.write(aseq + '\n')
 
 argument_parser = None
 def get_argument_parser():

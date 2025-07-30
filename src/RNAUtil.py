@@ -1,9 +1,12 @@
 from __future__ import annotations
+
+import platform
 import shlex
 import subprocess
 from argparse import ArgumentError
 from collections.abc import Callable
 from os import PathLike
+from platform import architecture
 
 import pandas as pd
 from pathlib import Path
@@ -60,6 +63,40 @@ def getSSCountDF(ct_dataframe : DataFrame, save_to_file: bool = None, output_fil
         df_grouped.to_csv(output_file, index=False, header=False)
     return df_grouped
 
+def _map_all(path_mapper: Callable[[str], Path | str], *files: str | Path) -> tuple[Path | str, ...]:
+    return tuple((path_mapper(file) if isinstance(file, str) else file) for file in files)
+
+base_folder = Path(__file__).parent / "RNAStructure_Binaries"
+folders = {
+    'Windows,AMD64': "Windows64",
+    'Linux,x86_64': "Linux64"
+}
+rna_structure_directory = None
+def get_RNAStructure_directory() -> Path:
+    """
+    Get the RNAStructure directory for optimized RNAStructure programs
+    :return:
+    """
+    global rna_structure_directory
+    rna_structure_directory = (rna_structure_directory or
+                               base_folder / folders.get(f"{platform.system()},{platform.machine()}", "")) #use root if none found, will just be the system
+    return rna_structure_directory
+
+def get_program(program: str):
+    directory = get_RNAStructure_directory()
+    file = next((file for file in directory.iterdir() if file.stem == program), None)
+    return file or program
+
+#specific to RNAStructure
+def _run_program(program, files_in: list | str | Path, file_out: str | Path, arguments: str = "", remove_input: bool = False):
+    files_in = files_in if isinstance(files_in, list) else [files_in]
+    try:
+        program = get_program(program)
+        subprocess.check_output([program, *files_in, file_out, *shlex.split(arguments)])
+        return file_out
+    finally:
+        if remove_input: remove_files(*files_in)
+
 class RNAStructureWrapper:
     @staticmethod
     def oligoscreen(input: pd.Series, file_name: str, path_mapper: Callable[[str], Path | str] = lambda x: x, arguments: str = "") -> DataFrame:
@@ -68,30 +105,37 @@ class RNAStructureWrapper:
         try:
             input.to_csv(input_path, index=False, header=False)
 
-            subprocess.check_output(["oligoscreen",  input_path, output_path, *shlex.split(arguments)])
+            _run_program("oligoscreen",  input_path, output_path, *shlex.split(arguments))
             read_oligosc = pd.read_csv(output_path, delimiter='\t', usecols=[1, 2, 3])
             return read_oligosc
         finally:
             remove_files(input_path, output_path)
 
     @staticmethod
-    def fold(file_in: str | PathLike[str], file_out: str | PathLike[str], path_mapper: Callable[[str], Path | str] = lambda x: x, remove_seq = False,
-                    arguments: str = "") -> Path | str:
-        seq_file = path_mapper(file_in)
-        ct_file = path_mapper(file_out)
-
-        subprocess.check_output(["fold", seq_file, ct_file, *shlex.split(arguments)])
-
-        if remove_seq: remove_files(seq_file)
+    def fold(file_in: str | PathLike[str], file_out: str | PathLike[str], path_mapper: Callable[[str], Path | str] = lambda x: x,
+                    arguments: str = "", remove_input: bool = False) -> Path | str:
+        seq_file, ct_file = _map_all(path_mapper, file_in, file_out)
+        _run_program("fold", seq_file, ct_file, arguments, remove_input=remove_input)
         return ct_file
 
     @staticmethod
-    def draw(file_in: str | PathLike[str], file_out: str | PathLike[str], path_mapper: Callable[[str], Path | str] = lambda x: x, remove_ct = False,
-                    arguments: str = "") -> Path | str:
-        ct_file = path_mapper(file_in)
-        svg_file = path_mapper(file_out)
+    def draw(file_in: str | PathLike[str], file_out: str | PathLike[str], path_mapper: Callable[[str], Path | str] = lambda x: x,
+                    arguments: str = "", remove_input: bool = False) -> Path | str:
+        ct_file, svg_file = _map_all(path_mapper, file_in, file_out)
+        _run_program("draw", ct_file, svg_file, arguments, remove_input=remove_input)
 
-        subprocess.check_output(["draw", ct_file, svg_file, *shlex.split(arguments)])
-
-        if remove_ct: remove_files(ct_file)
         return svg_file
+
+    @staticmethod
+    def oligowalk(file_in: str | Path, file_out: str | Path, path_mapper: Callable[[str], Path | str] = lambda x: x,
+                  arguments: str = "--structure -d -l 20 -c 0.25uM -m 1 -s 3", remove_input: bool = False) -> Path | str:
+        file_in, file_out = _map_all(path_mapper, file_in, file_out)
+        _run_program("OligoWalk", file_in, file_out, arguments, remove_input=remove_input)
+        return file_out
+
+    @staticmethod
+    def bifold(file_in1: str | Path, file_in2: str | Path, file_out: str | Path, path_mapper: Callable[[str], Path | str] = lambda x: x,
+               arguments: str = "--DNA --intramolecular --list", remove_input: bool = False) -> Path | str:
+        file_in1, file_in2, file_out = _map_all(path_mapper, file_in1, file_in2, file_out)
+        _run_program("bifold", [file_in1, file_in2], file_out, arguments, remove_input=remove_input)
+        return file_out
