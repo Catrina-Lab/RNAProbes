@@ -13,7 +13,8 @@ from pandas import DataFrame
 
 from src.RNASuiteUtil import ProgramObject, run_command_line
 from src.util import (input_int_in_range, bounded_int, path_string, path_arg, remove_if_exists,
-                      remove_files, validate_arg, validate_range_arg, parse_file_input, ValidationError, input_value)
+                      remove_files, validate_arg, validate_range_arg, parse_file_input, ValidationError, input_value,
+                      input_path_string, input_path)
 from src.RNAUtil import CT_to_sscount_df, RNAStructureWrapper
 
 probeMin = 18
@@ -27,10 +28,12 @@ svg_dir_name = "[fname]_svg_files"
 
 undscr = ("->" * 40) + "\n"
 copyright_msg = (("\n" * 6) +
-      f'PinMol  Copyright (C) 2017  Irina E. Catrina\n' +
+      f'PinMol Copyright (C) 2017  Irina E. Catrina\n' +
       'This program comes with ABSOLUTELY NO WARRANTY;\n' +
       'This is free software, and you are welcome to redistribute it\n' +
-      'under certain conditions; for details please read the GNU_GPL.txt file.\n' +
+      'under certain conditions; for details please read the GNU_GPL.txt file.\n\n' +
+     "Feel free to use the CLI or to run the program directly with command line arguments \n" +
+     "(view available arguments with --help).\n\n" +
       undscr +
       "\nWARNING: Previous files will be overwritten!  Save them in a \n" +
       "different location than the current file, or rename them to \n"+
@@ -109,7 +112,7 @@ def regionTarget(df: DataFrame, probe_length: int,  arguments: Namespace) -> tup
     tg_start = input_int_in_range(
         msg="If a specific region within the target is needed, please enter the number of start base (the initial base is 1): ",
         min=1, max=max_base + 1, initial_value=arguments.start, retry_if_fail=arguments.from_command_line)
-    tg_end = input_int_in_range(msg=f"  and the number of end base or -1 for the max (minimum {tg_start + probe_length}): ",
+    tg_end = input_int_in_range(msg=f"Now please enter the number of end base, minimum {tg_start + probe_length}, maximum {max_base} (or -1): ",
                                 fail_message=f"The end value must be at least the start value + probe_length ({tg_start + probe_length}) and less than the "
                                              f"max base ({max_base} or -1).",
                                 min=tg_start + probe_length, max=max_base + 1, initial_value=arguments.end,
@@ -245,8 +248,7 @@ def parse_blast_file(DG_probes: DataFrame, probe_length: int, program_object: Pr
     arguments = program_object.arguments
     program_object.validate(arguments.from_command_line or arguments.blast_file, "You must include an xml blast file if considering blast!")
     if should_print(arguments): print("\n"*2+'Please use the file blast_picks.fasta to perform blast with refseq-rna database, and desired organism.\n For targets other than mRNAs make sure you use the Nucleotide collection (nr/nt) instead!')
-    save_file = input_value('Enter path and file name for your existing blast XML file: ', Path,
-                            predicate = lambda path: path.exists() and path.suffix == ".xml",
+    save_file = input_path(".xml", msg='Enter path and file name for your existing blast XML file: ',
                             fail_message='Your file is invalid (either does not exist or is not an xml file). Please enter the path and file name for your existing blast XML file: ',
                             initial_value=arguments.blast_file,
                             retry_if_fail=arguments.from_command_line)
@@ -459,13 +461,14 @@ def should_print(arguments: Namespace | ProgramObject, is_content_verbose: bool 
 def run(args: str | list="", from_command_line: bool = True):
     arguments = parse_arguments(args, from_command_line)
     if should_print(arguments): print(copyright_msg)
-    file_name = arguments.file or input('Enter the ct file path and name: ')
+    file_name = input_path_string(".ct", msg='Enter the ct file path and name: ', fail_message='This file is invalid (either does not exist or is not a .ct file). Please input a valid .ct file: ',
+                        initial_value= arguments.file, retry_if_fail=arguments.from_command_line)
 
     probe_length = arguments.probes or input_int_in_range(min=probeMin, max=probeMax + 1,
                                                           msg=f"Enter the length of a probe; a number between {probeMin} and {probeMax} inclusive: ",
                                                           fail_message=f'You must type a number between {probeMin} and {probeMax}, try again: ')
 
-    calculate_result(open(file_name, "r"), probe_length, file_name, arguments, arguments)
+    calculate_result(open(file_name, "r"), probe_length, file_name, arguments)
 
     if should_print(arguments):
         print("\n" + "This information can be also be found in the file Final_molecular_beacons.csv" + "\n")

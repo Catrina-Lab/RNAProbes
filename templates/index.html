@@ -42,27 +42,10 @@
 {% endblock %}
 
 {% block scripts %}
-<script id="functions">
-    function changeWarningText(id, remove = false){
-      if(remove) document.getElementById(id).classList.remove("warning-text");
-      else document.getElementById(id).classList.add("warning-text");
-    }
-
-    function clickCard(programCard){
-      const checkbox = programCard.querySelector('input[type="checkbox"]'); //click the invisible checkbox
-      checkbox.checked = !checkbox.checked;
-      if(checkbox.checked) changeWarningText('program-select-label', true); //make it not red
-    }
-  </script>
+  <script src="{{ url_for('static', filename='program-card.js') }}"></script>
   
   <script>
-    const form = document.querySelector('#program-form');
-    form.addEventListener('click', e => {
-      let clickedElement;
-      if(clickedElement = e.target.closest(".program-card")){ //if you clicked a program-card (works with dynamic elements)
-        clickCard(clickedElement);
-      }
-    });
+    const form = document.querySelector("#program-form")
     form.addEventListener('submit', e=>{
       const selectedPrograms = form.querySelectorAll('input[type="checkbox"][name="programs"]:checked');
       if(selectedPrograms.length === 0){

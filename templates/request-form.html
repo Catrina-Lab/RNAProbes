@@ -59,10 +59,13 @@
           {% if 'smFISH' in programs %}
           <div class="program-section mb-4">
             <h3 class="fs-4"><i class="fas fa-search-plus me-2"></i>smFISH Options</h3>
-            <div class="mb-3">
-              <div class="form-check form-switch">
-                <input class="form-check-input" type="checkbox" role="switch" id="smFISH-intermolecular" name="smFISH-intermolecular">
-                <label class="form-check-label" for="smFISH-intermolecular">Consider Intermolecular base pairings</label>
+            <div class="program-card program-card-inline">
+              <div class="inline-card-body">
+                <div>
+                  <label class="form-check-label" for="smFISH-intermolecular">Consider Intermolecular base pairings</label>
+                  <div class="form-text mt-1">Check this to enable analysis of interactions between separate RNA molecules.</div>
+                </div>
+                <input type="checkbox" name="smFISH-intermolecular" value="intermolecular" class="form-check-input">
               </div>
             </div>
           </div>

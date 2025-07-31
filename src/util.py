@@ -50,7 +50,10 @@ class DiscontinuousRange:
     def __repr__(self):
         return f"DiscontinuousRange({str(self)})"
 
-def input_value(msg : str, mapper: type[any] = int, predicate = lambda n: True, fail_message : str = None, initial_value = None, retry_if_fail=True, map_initial_value = False):
+def identity(x):
+    return x
+
+def input_value(msg : str, mapper: type[any] = identity, predicate = lambda n: True, fail_message : str = None, initial_value = None, retry_if_fail=True, map_initial_value = False):
     fail_message = fail_message or msg
     while True:
         try:
@@ -60,7 +63,7 @@ def input_value(msg : str, mapper: type[any] = int, predicate = lambda n: True, 
             if not predicate(x):
                 raise ValueError()
             return x
-        except (ValueError, EOFError, TypeError) as e:
+        except Exception as e:
             if retry_if_fail: print(fail_message)
             else: raise ValueError(fail_message) from e
 
@@ -68,7 +71,7 @@ def input_int_in_range(min: int = None, max: int = None, msg : str = None, fail_
                        initial_value = None, extra_predicate=lambda x: False, retry_if_fail=True) -> int:
     fail_message = fail_message or f"Please input an integer between {min} (inclusive) and {max} (exclusive)."
     msg = msg or f"Input an integer between {min} (inclusive) and {max} (exclusive): "
-    return input_value(msg, initial_value=initial_value, predicate = lambda x: ((min is None or x >= min) and (max is None or x < max)) or extra_predicate(x),
+    return input_value(msg, mapper=int, initial_value=initial_value, predicate = lambda x: ((min is None or x >= min) and (max is None or x < max)) or extra_predicate(x),
                        fail_message = fail_message, retry_if_fail=retry_if_fail)
 
 def input_range(min: int = None, max: int = None, msg : str = None, fail_message : str = None,
@@ -90,8 +93,17 @@ def input_bool(true_vals: str | list[str] = "y,yes,true,t", false_vals: str | li
         if string in false_vals: return False
         raise ValueError(f"String must be one of {true_vals} or {false_vals}")
     return input_value(msg, mapper=matches, initial_value=initial_value,
-                       fail_message = fail_message, retry_if_fail=retry_if_fail, predicate=lambda x: isinstance(x, bool), map_initial_value=True)
+                       fail_message = fail_message, retry_if_fail=retry_if_fail, predicate=lambda x: isinstance(x, bool), map_initial_value=map_initial_value)
 
+def input_path(*suffixes: str, msg : str = None, fail_message : str = None, initial_value = None, retry_if_fail=True, map_initial_value=False):
+    fail_message = fail_message or f"Please input the path to a file. Extension can be: {', '.join(suffixes)}"
+    msg = msg or f"Input the path to a file. Extension can be: {', '.join(suffixes)}"
+    return input_value(msg, fail_message=fail_message, mapper=Path, predicate=lambda path: path.exists() and path.suffix in suffixes, initial_value=initial_value, retry_if_fail=retry_if_fail, map_initial_value=map_initial_value)
+
+def input_path_string(*suffixes: str, msg : str = None, fail_message : str = None, initial_value = None, retry_if_fail=True, map_initial_value=False):
+    fail_message = fail_message or f"Please input the path to a file. Extension can be: {', '.join(suffixes)}"
+    msg = msg or f"Input the path to a file. Extension can be: {', '.join(suffixes)}"
+    return input_value(msg, fail_message=fail_message, predicate=lambda string: Path(string).exists() and Path(string).suffix in suffixes, initial_value=initial_value, retry_if_fail=retry_if_fail, map_initial_value=map_initial_value)
 
 def remove_files(*files):
     for file in files:
@@ -189,8 +201,9 @@ def parse_file_input(filein, output_dir = None) -> ParsedFile:
     return ParsedFile(mb_userpath, fname, filein_path.suffix)
 
 def safe_remove_tree(folder: Path, root_dir): #just to be really safe when removing files
+    if not folder.exists(): return
     if root_dir in folder.parents:
-        if folder.exists(): shutil.rmtree(folder)
+        shutil.rmtree(folder)
     else:
         raise ValueError(f"The given folder {folder} is not a child of root folder {root_dir}")
 

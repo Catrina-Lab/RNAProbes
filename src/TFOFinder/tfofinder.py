@@ -1,21 +1,27 @@
 from __future__ import annotations
 import shlex
 import sys
-import os
 from collections.abc import Iterable
 
-import pandas as pd
-import io
 from Bio.SeqUtils import MeltingTemp as mt
-from pathlib import Path
-from Bio.Seq import Seq #don't think this is used even in the original
-from numpy.f2py.rules import arg_rules
 from pandas import DataFrame
 
 from src.RNASuiteUtil import BufferedProgramObject, ProgramObject, run_command_line
 from src.util import (path_string, validate_arg, parse_file_input,
-                      DiscontinuousRange, input_range, validate_doesnt_throw)
+                      DiscontinuousRange, input_range, validate_doesnt_throw, input_path, input_path_string)
 from src.RNAUtil import CT_to_sscount_df
+
+undscr = ("->" * 40)
+copyright_msg = ("\n" * 5) + (" \x1B[3m TFOFinder\x1B[0m  Copyright (C) 2022  Irina E. Catrina\n"
+      "This program comes with ABSOLUTELY NO WARRANTY;\n"
+      "This is free software, and you are welcome to redistribute it\n"
+      "under certain conditions; for details please read the GNU_GPL.txt file.\n\n"
+      "Feel free to use the CLI or to run the program directly with command line arguments \n"
+      "(view available arguments with --help).\n\n"
+      f"{undscr}\n\n"
+      "WARNING: Previous files will be overwritten or appended!  Save them in a\n"
+      "different location than the current input file, or rename them.\n\n"
+      f"{undscr}")
 
 probeMin = 4
 probeMax = 30
@@ -144,20 +150,10 @@ def parse_arguments(args: str | list, from_command_line = True):
 def run(args="", from_command_line = True):
     arguments = parse_arguments(args, from_command_line = from_command_line)
     if should_print(arguments):
-        print("\n" * 5)
-        print(" \x1B[3m TFOFinder\x1B[0m  Copyright (C) 2022  Irina E. Catrina\n"
-              "This program comes with ABSOLUTELY NO WARRANTY;\n"
-              "This is free software, and you are welcome to redistribute it\n"
-              "under certain conditions; for details please read the GNU_GPL.txt file.\n\n"
-              "Feel free to use the CLI or to run the program directly with command line arguments \n"
-              "(view available arguments with --help).\n\n"
+       print(copyright_msg)
 
-              f"{'->' * 40}\n\n"
-              "WARNING: Previous files will be overwritten or appended!  Save them in a\n"
-              "different location than the current input file, or rename them.\n\n"
-              f"{'->' * 40}")
-
-    filein = arguments.file or input('Enter the ct file path and name: ')
+    filein = input_path_string(".ct", msg='Enter the ct file path and name: ', fail_message='This file is invalid (either does not exist or is not a .ct file). Please input a valid .ct file: ',
+                        initial_value= arguments.file, retry_if_fail=arguments.from_command_line)
     mb_userpath, fname, suffix = parse_file_input(filein, arguments.output_dir)
 
     # probe_length = input_int_in_range(min=probeMin, max=probeMax + 1,

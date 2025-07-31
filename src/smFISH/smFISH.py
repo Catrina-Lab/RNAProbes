@@ -8,19 +8,20 @@ import pandas as pd
 import itertools
 import math
 from pathlib import Path
-# import RNAstructure
 from pandas import DataFrame
 
 from src.RNASuiteUtil import run_command_line, ProgramObject
 from src.RNAUtil import RNAStructureWrapper
-from src.util import bounded_int, path_string, path_arg, input_bool, validate_arg, parse_file_input
+from src.util import path_string, path_arg, input_bool, validate_arg, parse_file_input, input_path_string
 
 undscr = ("->" * 40) + "\n"
 copyright_msg = (("\n" * 6) +
           f'smFISH_HybEff program  Copyright (C) 2022  Irina E. Catrina\n' +
           'This program comes with ABSOLUTELY NO WARRANTY;\n' +
           'This is free software, and you are welcome to redistribute it\n' +
-          'under certain conditions; for details please read the GNU_GPL.txt file.\n' +
+          'under certain conditions; for details please read the GNU_GPL.txt file.\n\n' +
+          "Feel free to use the CLI or to run the program directly with command line arguments \n" +
+          "(view available arguments with --help).\n\n" +
           undscr +
           "\nWARNING: Previous files will be overwritten or appended!\n" +
           undscr)
@@ -30,20 +31,25 @@ length = 20
 gas_constant = 0.001987
 temp_K = 310.15 #37 C or 98.6 F
 
-def validate_arguments(file_path, arguments: Namespace, **ignore) -> dict:
+def validate_arguments(file_path: Path, arguments: Namespace, **ignore) -> dict:
     validate_arg(parse_file_input(file_path).suffix == ".ct", "The given file must be a valid .ct file")
-    validate_arg(parse_file_input(file_path), )
+    validate_arg(Path(file_path).exists(), msg="The ct file must exist")
     validate_arg(hasattr(arguments, 'intermolecular') and arguments.intermolecular is not None, "You must use decide whether to use intermolecular or not")
     return dict()
 
-def calculate_result(file_path, arguments: Namespace, output_dir: Path = None):
+
+def get_missing_arguments(arguments: Namespace) -> None:
+    arguments.intermolecular = input_bool(msg="Do you want to run smFISH in intermolecular mode? (y/n)",
+                                          initial_value=arguments.intermolecular,
+                                          retry_if_fail=arguments.from_command_line)
+
+def calculate_result(file_path, arguments: Namespace, output_dir: Path = None, **ignore):
     output_dir, fname, _ = parse_file_input(file_path, output_dir or arguments.output_dir)
+    get_missing_arguments(arguments)
     program_object = ProgramObject(output_dir=output_dir, file_stem=fname, arguments=arguments)
     df_filtered = process_ct_file(file_path, program_object)
 
     try_intermolecular(program_object, df_filtered)
-
-    if not program_object.arguments.keep_files: clean_output(program_object)
 
     return program_object
 
@@ -54,12 +60,6 @@ def try_intermolecular(program_object: ProgramObject, df_filtered):
         # Process the second program using the extracted oligos
         process_list_file(program_object, oligos)
 
-def clean_output(program_object: ProgramObject):
-    output_dir, fname = program_object.output_dir, program_object.file_stem
-    program_object.cleanup()
-    if program_object.arguments.intermolecular:
-        os.remove(output_dir / f"{fname}pairs.out")
-        os.remove(output_dir / f"{fname}pairs.txt")
 
 def parse_file_name(filein, output_dir:Path=None):
     filein_path = Path(filein).resolve()  # Convert the filein to a Path object and resolve its full path
@@ -195,7 +195,6 @@ def create_arg_parser():
     parser.add_argument("-o", "--output-dir", type=functools.partial(path_arg, suffix=""))
     parser.add_argument("-v", "--verbose", action="store_true")
     parser.add_argument("-q", "--quiet", action="store_true")
-    parser.add_argument("-k", "--keep-files", action="store_true")
     parser.add_argument("-d", "--delete-ct", action="store_true", help="Remove the ct input file. Not recommended unless running from a server")
 
     arg_group = parser.add_argument_group('Intermolecular',
@@ -219,10 +218,9 @@ def run(args="", from_command_line = True):
     arguments = parse_arguments(args, from_command_line=from_command_line)
     if should_print(arguments): print(copyright_msg)
 
-    ct_filein = arguments.file or input('Enter the ct file path and name: ')
+    ct_filein = input_path_string(".ct", msg='Enter the ct file path and name: ', fail_message='This file is invalid (either does not exist or is not a .ct file). Please input a valid .ct file: ',
+                        initial_value= arguments.file, retry_if_fail=arguments.from_command_line)
 
-    arguments.intermolecular = input_bool(msg="Do you want to run smFISH in intermolecular mode? (y/n)",
-                                          initial_value=arguments.intermolecular, retry_if_fail=arguments.from_command_line)
     calculate_result(ct_filein, arguments)
 
     if arguments.intermolecular:

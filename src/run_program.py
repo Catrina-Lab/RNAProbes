@@ -1,11 +1,15 @@
 from __future__ import annotations
 import sys
+from pathlib import Path
+
+sys.path.append(str(Path(__file__).resolve().parent.parent))
 
 from src.PinMol import pinmol
 from src.RNASuiteUtil import run_command_line
 from src.TFOFinder import tfofinder
 from src.smFISH import smFISH
 from src.util import input_value
+
 
 programs = {
     "tfofinder": tfofinder.run,

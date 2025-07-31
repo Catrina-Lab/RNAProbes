@@ -9,8 +9,13 @@
   --card-background: #ffffff;
   --card-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
   --card-hover-shadow: 0 6px 20px rgba(0, 0, 0, 0.15);
+  --inline-card-shadow: 0 3px 10px rgba(0, 0, 0, 0.1);
+  --inline-card-hover-shadow: 0 4px 15px rgba(0, 0, 0, 0.15);
 }
-
+.program-card-inline {
+  --card-shadow: var(--inline-card-shadow);
+  --card-hover-shadow: var(--inline-card-hover-shadow);
+}
 body {
   background-color: var(--background-color);
   color: var(--text-color);
@@ -74,6 +79,7 @@ body {
   height: 100%;
   position: relative;
   overflow: hidden;
+  user-select: none;
 }
 .fas:not(.fa-dna), .card-icon {
   display: none !important; /* hidden for now until I can come up with better icons (and can keep the proceed button on the page)*/
@@ -152,4 +158,20 @@ body {
 .program-card:has(input[type="checkbox"]:checked) {
   border-color: #0d6efd;
   box-shadow: 0 0 10px rgba(13, 110, 253, 0.5);
+}
+
+.program-card-inline {
+    border: 1px solid #dee2e6;
+    margin-top: 1rem;
+    padding: 1.5rem;
+}
+
+.program-card-inline:hover {
+  transform: translateY(-3px);
+}
+
+.inline-card-body {
+  max-width: 376px;
+  margin: 0 auto;
+  align-items: center;
 }

@@ -1,12 +1,17 @@
 #python version >=3.9
 from __future__ import annotations
+
+import functools
 import uuid
 from collections.abc import Callable
+from tempfile import SpooledTemporaryFile
 
 from flask import Flask, render_template, request, redirect, url_for, jsonify, Response
 from sys import argv
 
-from DelayedProgram import DelayedProgram, result_dir_name
+from werkzeug.datastructures import FileStorage
+
+from DelayedProgram import DelayedProgram
 from Program import Program
 
 from src.RNASuiteUtil import ProgramObject
@@ -52,6 +57,7 @@ def delete_folder_tree(dir_arg_name: str = "output_dir", root_dir: Path = root, 
     """
     safe_remove_tree(kwargs[dir_arg_name], root_dir)
 
+
 def get_zip_bytes(filename: str, **kwargs) -> bytes:
     file_obj = io.BytesIO()
     with zipfile.ZipFile(file_obj, 'w', compression=zipfile.ZIP_DEFLATED) as zip_file:
@@ -68,16 +74,17 @@ def get_result_temp(program: str, result: str, **kwargs) -> tuple[bytes, str]:
     filename = f"TempResult-{program}.zip"
     return zip_file, filename
 
-def save_to_file(file_stream, path: Path):
-    with open(path, 'w') as f:
-        f.write(file_stream)
+def save_to_file(file_storage: FileStorage, path: Path, parent_exist_ok = True):
+    path.parent.mkdir(parents=True, exist_ok=parent_exist_ok) #not needed in this case
+    file_storage.save(path)
+
 
 def smFISH_get_args(req, output_dir: Path) -> dict:
     file_path = output_dir / secure_filename(req.files.get("ct-file").filename)
-    save_to_file(req.files.get("ct-file").stream, file_path)
+    save_to_file(req.files.get("ct-file"), file_path)
     return dict(file_path = file_path,
         output_dir = output_dir,
-        arguments = smFISH.parse_arguments("i" if req.form.get("smFISH-intermolecular") else "-ni", from_command_line=False)
+        arguments = smFISH.parse_arguments("-d "+ ("-i" if req.form.get("smFISH-intermolecular") else "-ni"), from_command_line=False)
          )
 
 program_dict = { #get args, validate args, return value
@@ -87,7 +94,7 @@ program_dict = { #get args, validate args, return value
                                       filename = secure_filename(req.files.get("ct-file").filename),
                                          arguments = tfofinder.parse_arguments("", from_command_line=False)),
                 tfofinder.validate_arguments,
-                  partial(close_file, tfofinder.calculate_result)), #temp functions
+                  partial(close_file, tfofinder.calculate_result), root_dir=root, folder_not_needed=True),
     'pinmol': Program("PinMol", lambda req, output_dir: dict(filein= req.files.get("ct-file").stream,
                                    probe_length = req.form.get("pinmol-probe-length", type=int),
                                    output_dir = output_dir,
@@ -96,11 +103,8 @@ program_dict = { #get args, validate args, return value
                                                                         f"{optional_argument(req, 'pinmol-start-base', '-s', default_value=1)}"
                                                                         f"{optional_argument(req, 'pinmol-end-base', '-e', default_value=-1)}",
                                                                         from_command_line=False)
-), pinmol.validate_arguments, partial(close_file, pinmol.calculate_result), output_dir=pinmol_output_dir, run_finally=delete_folder_tree),
-    'smfish': DelayedProgram("smFISH", lambda req, output_dir: {
-        dict(filein = req.files.get("ct-file").stream,
-                                    filename=secure_filename(req.files.get("ct-file").filename)
-                                    )}, smFISH.validate_arguments, lambda x: x, partial(get_result_temp, "smFISH"), output_dir=sm_fish_output_dir)
+), pinmol.validate_arguments, partial(close_file, pinmol.calculate_result), output_dir=pinmol_output_dir, root_dir=root),
+    'smfish': DelayedProgram("smFISH", smFISH_get_args, smFISH.validate_arguments, smFISH.calculate_result, output_dir=sm_fish_output_dir, root_dir=root)
 }
 
 @app.route('/')
@@ -126,10 +130,10 @@ def send_request():
 
 @app.route('/query-result', methods=['GET'])
 def query_result():
-    program_name = request.args.get("program")
-    id = request.args.get("id")
+    program_name = secure_filename(request.args.get("program")) #prevents injection attacks
+    id = uuid.UUID(request.args.get("id")) #prevents injection attacks
     program = program_dict[program_name.lower()]
-    output_dir = program.output_dir / id / result_dir_name
+    output_dir = program.output_dir / str(id)
     if isinstance(program, DelayedProgram):
         return program.get_current_result(output_dir, id)
     else:
