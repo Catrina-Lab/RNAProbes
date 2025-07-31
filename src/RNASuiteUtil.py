@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import shutil
+import sys
 import zipfile
 from argparse import Namespace
 from collections import namedtuple
@@ -18,8 +19,7 @@ def run_command_line(run: Callable, *args, **kwargs):
     try:
         return run(*args, **kwargs)
     except ValidationError as e:
-        FAIL_COLOR, END_COLOR = '\033[91m', '\033[0m'
-        print(f"{FAIL_COLOR}{str(e)}. Program terminated.{END_COLOR}")
+        print(f"{str(e)}. Program terminated.", file=sys.stderr)
 
 class UnclosableStringIO(io.StringIO):
     def close(self):
@@ -40,6 +40,9 @@ class FileManager:
     def add_file(self, rel_path: str, path: Path, delete_when_clean = True, is_directory = False):
         if delete_when_clean: self.files_to_delete.add(path)
         if not is_directory: self.files[rel_path] = path
+
+    def add_to_delete(self, path: Path):
+        self.files_to_delete.add(path)
 
     def get_files(self) -> dict:
         return self.files
@@ -117,6 +120,8 @@ class ProgramObject:
     def register_file(self, rel_path: str, true_path: Path = None, register_to_delete: bool = False, is_directory: bool=False):
         self.file_manager.add_file(rel_path=self._format_relative_path(rel_path), path=true_path or self.file_path(rel_path),
                                    delete_when_clean=register_to_delete, is_directory=is_directory)
+    def register_to_delete(self, rel_path: str = None, true_path: Path = None):
+        self.file_manager.add_to_delete(path=true_path or self.file_path(rel_path))
 
     def get_arg(self, argument):
         return getattr(self.arguments, argument)

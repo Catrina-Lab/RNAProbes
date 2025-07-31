@@ -7,3 +7,4 @@ profile.json
 user-files/*
 **/.venv/
 **/venv/
+**/poetry.lock

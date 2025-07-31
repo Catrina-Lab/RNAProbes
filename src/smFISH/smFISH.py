@@ -27,16 +27,19 @@ copyright_msg = (("\n" * 6) +
 
 concentration = 0.25e-6
 length = 20
+gas_constant = 0.001987
+temp_K = 310.15 #37 C or 98.6 F
 
-def validate_arguments(filename, arguments: Namespace) -> dict:
-    validate_arg(parse_file_input(filename).suffix == ".ct", "The given file must be a valid .ct file")
+def validate_arguments(file_path, arguments: Namespace, **ignore) -> dict:
+    validate_arg(parse_file_input(file_path).suffix == ".ct", "The given file must be a valid .ct file")
+    validate_arg(parse_file_input(file_path), )
     validate_arg(hasattr(arguments, 'intermolecular') and arguments.intermolecular is not None, "You must use decide whether to use intermolecular or not")
     return dict()
 
-def calculate_result(filename, arguments: Namespace):
-    output_dir, fname, _ = parse_file_input(filename, arguments.output_dir)
+def calculate_result(file_path, arguments: Namespace, output_dir: Path = None):
+    output_dir, fname, _ = parse_file_input(file_path, output_dir or arguments.output_dir)
     program_object = ProgramObject(output_dir=output_dir, file_stem=fname, arguments=arguments)
-    df_filtered = process_ct_file(filename, program_object)
+    df_filtered = process_ct_file(file_path, program_object)
 
     try_intermolecular(program_object, df_filtered)
 
@@ -53,6 +56,7 @@ def try_intermolecular(program_object: ProgramObject, df_filtered):
 
 def clean_output(program_object: ProgramObject):
     output_dir, fname = program_object.output_dir, program_object.file_stem
+    program_object.cleanup()
     if program_object.arguments.intermolecular:
         os.remove(output_dir / f"{fname}pairs.out")
         os.remove(output_dir / f"{fname}pairs.txt")
@@ -84,6 +88,7 @@ def get_filtered_file(df: DataFrame, program_object: ProgramObject) -> DataFrame
     current_chunk = []
     current_sum = 0
 
+    #get chunks
     for i in range(1, len(df)):
         diff = abs(df.iloc[i]['Pos'] - df.iloc[i - 1]['Pos'])  # Calculate the difference between consecutive rows
 
@@ -104,6 +109,7 @@ def get_filtered_file(df: DataFrame, program_object: ProgramObject) -> DataFrame
         current_chunk.append(df.iloc[-1])  # Add the last row of the DataFrame to the chunk
         chunks.append(pd.DataFrame(current_chunk))  # Save last chunk
 
+
     selected_rows = []
 
     for chunk in chunks:
@@ -115,19 +121,23 @@ def get_filtered_file(df: DataFrame, program_object: ProgramObject) -> DataFrame
                        index=False)  # Save the result to filtered_file.csv
     return filtered_df
 
+def equilibrium_constant(input):
+    return math.e ** (-(input / (gas_constant*temp_K)))
+
 def process_ct_file(filein, program_object: ProgramObject) -> DataFrame:
     arguments = program_object.arguments
-    output_path = RNAStructureWrapper.oligowalk(Path(filein), "[fname].txt", arguments=f"--structure -d -l {length} -c {concentration} -m 1 -s 3 --no-header", path_mapper=program_object.file_path)
-    df = pd.read_csv(output_path, skiprows=3, sep='\t')
+    df = RNAStructureWrapper.oligowalk(Path(filein), arguments=f"--structure -d -l {length} -c {concentration} -m 1 -s 3 --no-header",
+                                       path_mapper=program_object.file_path, remove_input=program_object.arguments.delete_ct)
 
     #todo: ummm, 0.1 * 10???
     df['dG1FA'], df['dG2FA'], df['dG3FA'] = (df['Duplex (kcal/mol)'] + 0.2597 * 10,
                                                 df['Intra-oligo (kcal/mol)'] + 0.1000 * 10,
                                                 df['Break-Target (kcal/mol)'] + (0.0117 * abs(df['Break-Target (kcal/mol)'])) * 10)
-    df['exp1'], df['exp2'], df['exp3'] = (df['dG1FA'] / (0.001987 * 310.15),
-                                             df['dG2FA'] / (0.001987 * 310.15),
-                                             df['dG3FA'] / (0.001987 * 310.15))
-    df['Koverall'] = math.e ** (-df['exp1']) / ((1 + math.e ** (-df['exp2'])) * (1 + math.e ** (-df['exp3'])))
+    df['exp1'], df['exp2'], df['exp3'] = (df['dG1FA'] / (gas_constant*temp_K),
+                                             df['dG2FA'] / (gas_constant*temp_K),
+                                             df['dG3FA'] / (gas_constant*temp_K))
+    df['Koverall'] = (equilibrium_constant(df['dG1FA']) /
+                      ((1 + equilibrium_constant(df['dG2FA'])) * (1 + equilibrium_constant(df['dG3FA']))))
     k_overall = (concentration * df['Koverall'])
     df['Hybeff'] = k_overall / (1 + k_overall)
 
@@ -161,15 +171,8 @@ def process_list_file(program_object: ProgramObject, oligos):
             f.write(a + ' ' + b + '\n')
 
     #run bifold with a dummy file
-    RNAStructureWrapper.bifold(f"[fname]pairs.txt", f"[fname]somefile", f"[fname]pairs.out", program_object.file_path)
-
-    out_file = program_object.file_path("[fname]pairs.out")
-    energy_values = []
-    with open(out_file, 'r') as f:
-        lines = f.readlines()
-        for line in lines:
-            energy_values.append(line.strip())
-    # Read the pairs file to get the sequence pairs
+    energy_values = RNAStructureWrapper.bifold(f"[fname]pairs.txt", f"[fname]somefile", f"[fname]pairs.out", program_object.file_path,
+                                               remove_input=True)
 
     # Combine the pairs with the energy values
     with program_object.open_buffer("[fname]combined_output.csv", 'w') as f:
@@ -193,6 +196,7 @@ def create_arg_parser():
     parser.add_argument("-v", "--verbose", action="store_true")
     parser.add_argument("-q", "--quiet", action="store_true")
     parser.add_argument("-k", "--keep-files", action="store_true")
+    parser.add_argument("-d", "--delete-ct", action="store_true", help="Remove the ct input file. Not recommended unless running from a server")
 
     arg_group = parser.add_argument_group('Intermolecular',
                                           'Intermolecular command line settings. If none given, will ask')

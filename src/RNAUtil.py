@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import platform
 import shlex
 import subprocess
@@ -67,11 +68,15 @@ def _map_all(path_mapper: Callable[[str], Path | str], *files: str | Path) -> tu
     return tuple((path_mapper(file) if isinstance(file, str) else file) for file in files)
 
 base_folder = Path(__file__).parent / "RNAStructure_Binaries"
-folders = {
-    'Windows,AMD64': "Windows64",
-    'Linux,x86_64': "Linux64"
-}
+folders = None
 rna_structure_directory = None
+def get_folders():
+    global folders
+    if folders is None:
+        path = base_folder / "architectures.json"
+        with open(path, "r") as file:
+            folders = json.load(file)
+    return folders
 def get_RNAStructure_directory() -> Path:
     """
     Get the RNAStructure directory for optimized RNAStructure programs
@@ -79,7 +84,7 @@ def get_RNAStructure_directory() -> Path:
     """
     global rna_structure_directory
     rna_structure_directory = (rna_structure_directory or
-                               base_folder / folders.get(f"{platform.system()},{platform.machine()}", "")) #use root if none found, will just be the system
+                               base_folder / get_folders().get(f"{platform.system()},{platform.machine()}", "")) #use root if none found, will just be the system
     return rna_structure_directory
 
 def get_program(program: str):
@@ -127,15 +132,24 @@ class RNAStructureWrapper:
         return svg_file
 
     @staticmethod
-    def oligowalk(file_in: str | Path, file_out: str | Path, path_mapper: Callable[[str], Path | str] = lambda x: x,
-                  arguments: str = "--structure -d -l 20 -c 0.25uM -m 1 -s 3", remove_input: bool = False) -> Path | str:
-        file_in, file_out = _map_all(path_mapper, file_in, file_out)
-        _run_program("OligoWalk", file_in, file_out, arguments, remove_input=remove_input)
-        return file_out
+    def oligowalk(file_in: str | Path, path_mapper: Callable[[str], Path] = lambda x: x,
+                  arguments: str = "--structure -d -l 20 -c 0.25uM -m 1 -s 3", remove_input: bool = False,
+                  keep_output = False) -> DataFrame:
+        file_in, = _map_all(path_mapper, file_in)
+        file_out = file_in.parent / (file_in.stem + "_oligowalk_output.txt")
+        try:
+            _run_program("OligoWalk", file_in, file_out, arguments, remove_input=remove_input)
+            return pd.read_csv(file_out, skiprows=3, sep='\t')
+        finally:
+            if not keep_output: remove_files(file_out)
 
     @staticmethod
     def bifold(file_in1: str | Path, file_in2: str | Path, file_out: str | Path, path_mapper: Callable[[str], Path | str] = lambda x: x,
-               arguments: str = "--DNA --intramolecular --list", remove_input: bool = False) -> Path | str:
+               arguments: str = "--DNA --intramolecular --list", remove_input: bool = False) -> list[str]:
         file_in1, file_in2, file_out = _map_all(path_mapper, file_in1, file_in2, file_out)
-        _run_program("bifold", [file_in1, file_in2], file_out, arguments, remove_input=remove_input)
-        return file_out
+        try:
+            _run_program("bifold", [file_in1, file_in2], file_out, arguments, remove_input=remove_input)
+            with open(file_out, 'r') as f: energy_values = [line.strip() for line in f.readlines()]
+            return energy_values
+        finally:
+            remove_files(file_out)

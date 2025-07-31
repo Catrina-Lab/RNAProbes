@@ -1,6 +1,7 @@
 [project]
 name = "RNAProbesSrc"
 description = "Files for modeling RNA Probes"
+version = "0.0.1"
 authors = [
     {name = "Irina Catrina"},
     {name = "Avi Kohn"},
@@ -12,3 +13,6 @@ dependencies = [
     "pandas"
 ]
 license = "GPL-3.0-or-later"
+
+[tool.poetry]
+package-mode = false

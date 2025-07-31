@@ -201,7 +201,23 @@ def _get_range(item: str | range | int) -> range:
     pair = item.split('-')  # may only be one item, but that's OK
     return range(int(pair[0]), int(pair[-1])+1)
 
+_Colors = dict(
+    RED='\033[91m',
+    YELLOW = '\033[93m',
+    GREEN='\033[92m',
+    BLUE = '\033[94m',
+    CYAN = '\033[96m',
+    MAGENTA = '\033[95m',
+    WHITE = '\033[97m',
+    HEADER='\033[95m',
+    FAIL = '\033[91m',
+    WARNING='\033[93m',
+    ENDC = '\033[0m',
+    BOLD = '\033[1m',
+    UNDERLINE = '\033[4m')
 
+def print_style(msg, *colors):
+    print("".join(_Colors[color.upper()] for color in colors) + msg + _Colors['ENDC'])
 
 if __name__ == "__main__":
     print("Debug")

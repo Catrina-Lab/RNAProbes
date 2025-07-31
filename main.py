@@ -12,6 +12,7 @@ from Program import Program
 from src.RNASuiteUtil import ProgramObject
 from src.TFOFinder import tfofinder
 from src.PinMol import pinmol
+from src.smFISH import smFISH
 from src.util import optional_argument, get_folder_as_zip, ValidationError, safe_remove_tree
 from werkzeug.utils import secure_filename
 from functools import partial
@@ -67,6 +68,18 @@ def get_result_temp(program: str, result: str, **kwargs) -> tuple[bytes, str]:
     filename = f"TempResult-{program}.zip"
     return zip_file, filename
 
+def save_to_file(file_stream, path: Path):
+    with open(path, 'w') as f:
+        f.write(file_stream)
+
+def smFISH_get_args(req, output_dir: Path) -> dict:
+    file_path = output_dir / secure_filename(req.files.get("ct-file").filename)
+    save_to_file(req.files.get("ct-file").stream, file_path)
+    return dict(file_path = file_path,
+        output_dir = output_dir,
+        arguments = smFISH.parse_arguments("i" if req.form.get("smFISH-intermolecular") else "-ni", from_command_line=False)
+         )
+
 program_dict = { #get args, validate args, return value
     'tfofinder': Program("TFOFinder",
                         lambda req, _: dict(filein = req.files.get("ct-file").stream,
@@ -84,7 +97,10 @@ program_dict = { #get args, validate args, return value
                                                                         f"{optional_argument(req, 'pinmol-end-base', '-e', default_value=-1)}",
                                                                         from_command_line=False)
 ), pinmol.validate_arguments, partial(close_file, pinmol.calculate_result), output_dir=pinmol_output_dir, run_finally=delete_folder_tree),
-    'smfish': DelayedProgram("smFISH", lambda req, id: {"x": "test"}, lambda x: dict(), lambda x: x, partial(get_result_temp, "smFISH"), output_dir=sm_fish_output_dir)
+    'smfish': DelayedProgram("smFISH", lambda req, output_dir: {
+        dict(filein = req.files.get("ct-file").stream,
+                                    filename=secure_filename(req.files.get("ct-file").filename)
+                                    )}, smFISH.validate_arguments, lambda x: x, partial(get_result_temp, "smFISH"), output_dir=sm_fish_output_dir)
 }
 
 @app.route('/')

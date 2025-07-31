@@ -48,7 +48,7 @@ def validate_arguments(probe_length: int, filename, arguments: Namespace, **igno
     return {}
 
 def calculate_result(filein, probe_length: int, filename: str, arguments: Namespace, output_dir: Path = None):
-    output, stem, _ =  parse_file_input(filename, output_dir)
+    output, stem, _ =  parse_file_input(filename, output_dir or arguments.output_dir)
     program_object = ProgramObject(output, stem, arguments, file_name = filename, probe_length=probe_length)
     with filein as file:
         sscount_df, structure_count = CT_to_sscount_df(file, True,  program_object.save_buffer(f"[fname]_sscount.csv"))
@@ -465,7 +465,7 @@ def run(args: str | list="", from_command_line: bool = True):
                                                           msg=f"Enter the length of a probe; a number between {probeMin} and {probeMax} inclusive: ",
                                                           fail_message=f'You must type a number between {probeMin} and {probeMax}, try again: ')
 
-    calculate_result(open(file_name, "r"), probe_length, file_name, arguments, arguments.output_dir)
+    calculate_result(open(file_name, "r"), probe_length, file_name, arguments, arguments)
 
     if should_print(arguments):
         print("\n" + "This information can be also be found in the file Final_molecular_beacons.csv" + "\n")
