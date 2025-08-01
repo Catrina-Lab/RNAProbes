@@ -1,19 +1,19 @@
-[project]
-name = "RNAProbes"
-description = "Webserver for modeling RNA Probes"
-authors = [
-    {name = "Irina Catrina"},
-    {name = "Avi Kohn"},
-]
-requires-python = ">= 3.9" # At least Python 3.9
-readme = "README.md"
-version = "0.0.1"
-dependencies = [
-    "flask",
-    "Bio",
-    "pandas"
-]
-license = "GPL-3.0-or-later"
-
 [tool.poetry]
+name = "RNAProbes"
+version = "0.0.1"
+description = "Webserver for modeling RNA Probes"
+authors = ["Irina Catrina", "Avi Kohn"]
+license = "GPL-3.0-or-later"
+readme = "README.md"
 package-mode = false
+
+[tool.poetry.dependencies]
+python = "^3.9"
+flask = "^2.3"
+Bio = "*"
+pandas = "*"
+gunicorn = "*"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
