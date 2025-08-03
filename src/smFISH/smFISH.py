@@ -133,9 +133,6 @@ def process_ct_file(filein, program_object: ProgramObject) -> DataFrame:
     df['dG1FA'], df['dG2FA'], df['dG3FA'] = (df['Duplex (kcal/mol)'] + 0.2597 * 10,
                                                 df['Intra-oligo (kcal/mol)'] + 0.1000 * 10,
                                                 df['Break-Target (kcal/mol)'] + (0.0117 * abs(df['Break-Target (kcal/mol)'])) * 10)
-    df['exp1'], df['exp2'], df['exp3'] = (df['dG1FA'] / (gas_constant*temp_K),
-                                             df['dG2FA'] / (gas_constant*temp_K),
-                                             df['dG3FA'] / (gas_constant*temp_K))
     df['Koverall'] = (equilibrium_constant(df['dG1FA']) /
                       ((1 + equilibrium_constant(df['dG2FA'])) * (1 + equilibrium_constant(df['dG3FA']))))
     k_overall = (concentration * df['Koverall'])
@@ -146,7 +143,7 @@ def process_ct_file(filein, program_object: ProgramObject) -> DataFrame:
 
     df_filtered = df[(df.fGC >= 0.45) & (df.fGC <= 0.60) & (df.Hybeff >= 0.6)]  # & (df2.Pos >= 434) & (df2.Pos <= 1841)] #only CDS for oskRC
     df_filtered.reset_index(drop=True, inplace=True)
-    df_filtered.to_csv(program_object.save_buffer("[fname]3.csv"), sep=',', index=None)
+    df_filtered.to_csv(program_object.save_buffer("[fname]_unfiltered_probes.csv"), sep=',', index=None)
 
     if not arguments.intermolecular:
         filtered_df = get_filtered_file(df_filtered, program_object) #idk why only if not intermolecular, but whatever
@@ -226,13 +223,13 @@ def run(args="", from_command_line = True):
     if arguments.intermolecular:
         #no filtered_file??
         print("Check the *final_filtered_file.csv for proposed smFISH probes. However, if not enough probes have been"
-              +" selected given the initial selection criteria or only the CDS is targeted, please review the *filtered_file.csv and *3.csv to "
+              +" selected given the initial selection criteria or only the CDS is targeted, please review the *filtered_file.csv and *_unfiltered_probes.csv to "
               +"select additional probes. Moreover, the intermolecular interactions of the probes should be taken into acocunt. Please review the *combined_output.csv file, and eliminate any probes with "
               + "intermolecular hybdridization free energy change < -10kcal/mol.")
     else:
         print("Check the *final_filtered_file.csv for proposed smFISH probes. However, if not enough probes have been "
               "selected given the initial selection criteria or only the CDS is targeted, please review the *filtered_file.csv "
-              "and *3.csv to select additional probes.")
+              "and *_unfiltered_probes.csv to select additional probes.")
 
 if __name__ == "__main__":
     #if we succeed somehow (throught pythonpath, etc)...

@@ -141,41 +141,30 @@ def reverse_complement(seq): #generate RNA complement
     return seq.translate(basecomplement)[::-1]
 
 
+def sequence_probe(index: int, probe_len: int, structure_count: int, sscount_df: DataFrame, bases: str):
+    """
+    Sequence one specific probe
+    :param baseno: an integer representing the start of the probe, 1-indexed
+    :param probe_len: the length of the probe
+    :param sscount_df: the sscount dataframe
+    :return:
+    """
+    probe = bases[index: index + probe_len]
+    complement = reverse_complement(probe)
+
+    tml = int(mt.Tm_NN(complement, dnac1=50000, dnac2=50000, Na=100, nn_table=mt.RNA_NN1, saltcorr=1))
+
+    per = int((probe.count('A') + probe.count('G')) / probe_len * 100)
+
+    probe_sscounts = sscount_df.sscount[index:index + probe_len]
+    avg_sscount = probe_sscounts.sum() / (probe_len * structure_count)
+    return (sscount_df.baseno[index], per, avg_sscount, complement, tml) #could do i+1, but this is more robust
+
+
 def seqProbes(sscount_df: DataFrame, probe_length: int, structure_count: int, start=0, end = None):
     bases = ''.join(sscount_df.base)
-    result = list(itersplit_into_x_chunks(bases, probe_length, start=start, end=end))
-    basesl = []
-    for i in result:
-        i = reverse_complement(i)
-        basesl.append(i)
-
-    Tml = []
-    for i in basesl:
-        Tmx = mt.Tm_NN(i, dnac1 = 50000, dnac2 = 50000, Na = 100, nn_table = mt.RNA_NN1, saltcorr = 1)
-        Tml.append(int(Tmx))
-    result_bases = list(itersplit_into_x_chunks(sscount_df.base.to_list(), probe_length,start=start, end=end)) #list of lists of each base for each probe
-    #base number as j and list of these numbers as jl, list of percent of Gs and Cs as perl
-    j = 0
-    perl = []
-    jl = []
-    for i in result_bases:
-        j += 1
-        cs = i.count('C')
-        gs = i.count('G')
-        per = int((cs+gs)/probe_length*100)
-        perl.append(per)
-        jl.append(j)
-    result2 = list(itersplit_into_x_chunks(sscount_df.sscount, probe_length, start = start, end=end))
-    sumsl = []
-    for i in result2:
-        i = list(map(int, i))
-        sums = sum(i)/(probe_length*structure_count)
-        sumsl.append(sums)
-    df = DataFrame({"Base Number": jl,
-                    "%GC": perl,
-                    "sscount": sumsl,
-                    "Probe Sequence": basesl,
-                    "Tm": Tml})
+    probes = (sequence_probe(i, probe_length, structure_count, sscount_df, bases) for i in range(start, end))
+    df = DataFrame.from_records(probes, columns=["Base Number", "%GC", "sscount", "Probe Sequence", "Tm"])
     return df #put together all data as indicated in header
 
 def oligoscreen(probes: pd.Series, program_object: ProgramObject) -> DataFrame:

@@ -108,14 +108,15 @@ def sequence_probe(baseno: int, probe_len: int, structure_count: int, sscount_df
     :param sscount_df: the sscount dataframe
     :return:
     """
-    probe = "".join(sscount_df.base[baseno-1:baseno+probe_len - 1])
+    index = baseno - 1
+    probe = "".join(sscount_df.base[index: index + probe_len])
     complement = parallel_complement(probe)
 
     tml = int(mt.Tm_NN(complement, dnac1=50000, dnac2=50000, Na=100, nn_table=mt.RNA_NN1, saltcorr=1))
 
     per = int((probe.count('A') + probe.count('G')) / probe_len * 100)
 
-    probe_sscounts = sscount_df.sscount[baseno - 1:baseno + probe_len - 1]
+    probe_sscounts = sscount_df.sscount[index:index + probe_len]
     avg_sscount = probe_sscounts.sum() / (probe_len * structure_count)
     return (baseno, per, avg_sscount, complement, tml) #returns baseno so it can easily be written to file
 
