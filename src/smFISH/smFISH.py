@@ -8,10 +8,11 @@ import pandas as pd
 import itertools
 import math
 from pathlib import Path
-from pandas import DataFrame
+from pandas import DataFrame, Series
 
 from src.RNASuiteUtil import run_command_line, ProgramObject
 from src.RNAUtil import RNAStructureWrapper
+from src.smFISH.ReverseDijkstra import ReverseDijkstra
 from src.util import path_string, path_arg, input_bool, validate_arg, parse_file_input, input_path_string
 
 undscr = ("->" * 40) + "\n"
@@ -26,10 +27,24 @@ copyright_msg = (("\n" * 6) +
           "\nWARNING: Previous files will be overwritten or appended!\n" +
           undscr)
 
+probe_length = 20
 concentration = 0.25e-6
-length = 20
 gas_constant = 0.001987
 temp_K = 310.15 #37 C or 98.6 F
+min_Hybeff = .6
+
+count_weight, hybeff_weight = 1, 7 #change this to modify how the values are weighed. Rarely matters, but sometimes does
+def hybeff_modifier(hybeff) -> float:
+    modified_value = (hybeff - min_Hybeff) / (1 - min_Hybeff) #convert min_Hybeff - 1 -> 0-1
+    return modified_value*modified_value*modified_value*modified_value
+
+# count_weight, hybeff_weight = 1, 7 #change this to modify how the values are weighed. Rarely matters, but sometimes does
+# def hybeff_modifier(hybeff) -> float:
+#     return hybeff * hybeff * hybeff * hybeff * hybeff
+
+# count_weight, hybeff_weight = 1, 1 #change this to modify how the values are weighed
+# def hybeff_modifier(hybeff) -> float:
+#     return hybeff
 
 def validate_arguments(file_path: Path, arguments: Namespace, **ignore) -> dict:
     validate_arg(parse_file_input(file_path).suffix == ".ct", "The given file must be a valid .ct file")
@@ -43,7 +58,7 @@ def get_missing_arguments(arguments: Namespace) -> None:
                                           initial_value=arguments.intermolecular,
                                           retry_if_fail=arguments.from_command_line)
 
-def calculate_result(file_path, arguments: Namespace, output_dir: Path = None, **ignore):
+def calculate_result(file_path : str, arguments: Namespace, output_dir: Path = None, **ignore):
     output_dir, fname, _ = parse_file_input(file_path, output_dir or arguments.output_dir)
     get_missing_arguments(arguments)
     program_object = ProgramObject(output_dir=output_dir, file_stem=fname, arguments=arguments)
@@ -69,56 +84,24 @@ def parse_file_name(filein, output_dir:Path=None):
 def count_c_g(cell):
     return cell.count('C') + cell.count('G')
 
-def find_greater_by_22(df2):
-    results = []
-    for i in range(len(df2)):
-        found = False
-        for j in range(i + 1, len(df2)):
-            if df2.loc[j, 'Pos'] < df2.loc[i, 'Pos'] + 22 and df2.loc[j, 'Hybeff'] > df2.loc[i, 'Hybeff'] and df2.loc[j, 'Hybeff'] > 0.99:
-                results.append(df2.loc[j, 'Pos'])
-                found = True
-                break
-        if not found:
-            results.append(df2.loc[i, 'Pos'])
-    return results
 
+def can_have_path(val, first_match, possible_node):
+    to_return = (possible_node.Pos >= val.Pos + probe_length + 2 if val is not None else True) #can't be within 22 (probe_length + 2), unless this is the root
+    if to_return and first_match is not None:
+        to_return = to_return and first_match.Pos <= possible_node.Pos <= first_match.Pos + probe_length + 2 #if it doesn't match this, we can choose first_match AND this
+    return to_return
+
+def alg_cost_mapper(val: Series):
+    return count_weight + hybeff_weight * hybeff_modifier(val.Hybeff)
 
 def get_filtered_file(df: DataFrame, program_object: ProgramObject) -> DataFrame:
-    chunks = []
-    current_chunk = []
-    current_sum = 0
+    alg = ReverseDijkstra(df, value_mapper= alg_cost_mapper,
+                            can_have_path=can_have_path, indexer = lambda df, i: df.iloc[i])
+    max_val, path = alg.run()
+    filtered_df = DataFrame(path)
+    filtered_df.reset_index(drop=True, inplace=True)
 
-    #get chunks
-    for i in range(1, len(df)):
-        diff = abs(df.iloc[i]['Pos'] - df.iloc[i - 1]['Pos'])  # Calculate the difference between consecutive rows
-
-        if current_sum + diff <= 22:
-            current_chunk.append(df.iloc[i - 1])  # Add the previous row to the current chunk
-            current_sum += diff
-        else:
-            # Add the last row of the current chunk
-            if current_chunk:
-                current_chunk.append(df.iloc[i - 1])
-                chunks.append(pd.DataFrame(current_chunk))  # Save current chunk as a DataFrame
-
-            # Reset for next chunk
-            current_chunk = [df.iloc[i - 1]]  # Start new chunk with the last row
-            current_sum = diff  # Reset sum to the current difference
-
-    if current_chunk:
-        current_chunk.append(df.iloc[-1])  # Add the last row of the DataFrame to the chunk
-        chunks.append(pd.DataFrame(current_chunk))  # Save last chunk
-
-
-    selected_rows = []
-
-    for chunk in chunks:
-        max_row = chunk.loc[chunk['Hybeff'].idxmax()]  # Find row with max in column B
-        selected_rows.append(max_row)
-
-    filtered_df = pd.DataFrame(selected_rows)
-    filtered_df.to_csv(program_object.save_buffer("[fname]filtered_file.csv"),
-                       index=False)  # Save the result to filtered_file.csv
+    #filtered_df.to_csv(program_object.save_buffer("[fname]filtered_file.csv"), index=False)  # Save the result to filtered_file.csv
     return filtered_df
 
 def equilibrium_constant(input):
@@ -126,38 +109,42 @@ def equilibrium_constant(input):
 
 def process_ct_file(filein, program_object: ProgramObject) -> DataFrame:
     arguments = program_object.arguments
-    df = RNAStructureWrapper.oligowalk(Path(filein), arguments=f"--structure -d -l {length} -c {concentration} -m 1 -s 3 --no-header",
-                                       path_mapper=program_object.file_path, remove_input=program_object.arguments.delete_ct)
+    if not program_object.arguments.csv_file:
+        matching_probes = get_matching_probes(filein, program_object)
+    else:
+        matching_probes = pd.read_csv(program_object.arguments.csv_file)
 
-    #todo: ummm, 0.1 * 10???
-    df['dG1FA'], df['dG2FA'], df['dG3FA'] = (df['Duplex (kcal/mol)'] + 0.2597 * 10,
-                                                df['Intra-oligo (kcal/mol)'] + 0.1000 * 10,
-                                                df['Break-Target (kcal/mol)'] + (0.0117 * abs(df['Break-Target (kcal/mol)'])) * 10)
-    df['Koverall'] = (equilibrium_constant(df['dG1FA']) /
-                      ((1 + equilibrium_constant(df['dG2FA'])) * (1 + equilibrium_constant(df['dG3FA']))))
-    k_overall = (concentration * df['Koverall'])
+    filtered_df = get_filtered_file(matching_probes, program_object) #idk why only if not intermolecular, but whatever
+    filtered_df.to_csv(program_object.save_buffer(f"[fname]_final_filtered_file.csv"), index=False, float_format='%.10g')
+
+    return filtered_df
+
+def get_matching_probes(filein: str, program_object: ProgramObject):
+    df = RNAStructureWrapper.oligowalk(Path(filein),
+                                       arguments=f"--structure -d -l {probe_length} -c {concentration} -m 1 -s 3 --no-header",
+                                       path_mapper=program_object.file_path,
+                                       remove_input=program_object.arguments.delete_ct)
+    # todo: ummm, 0.1 * 10???
+    dG1FA, dG2FA, dG3FA = (df['Duplex (kcal/mol)'] + 0.2597 * 10,
+                           df['Intra-oligo (kcal/mol)'] + 0.1000 * 10,
+                           df['Break-Target (kcal/mol)'] + (0.0117 * abs(df['Break-Target (kcal/mol)'])) * 10)
+    Koverall = (equilibrium_constant(dG1FA) /
+                ((1 + equilibrium_constant(dG2FA)) * (1 + equilibrium_constant(dG3FA))))
+    k_overall = concentration * Koverall
     df['Hybeff'] = k_overall / (1 + k_overall)
 
-    df['fGC'] = (df['Oligo(5\'->3\')'].apply(count_c_g)) / length  # Apply the function to each cell in the DataFrame; GC fraction in each sequence
+    df['fGC'] = (df['Oligo(5\'->3\')'].apply(
+        count_c_g)) / probe_length  # Apply the function to each cell in the DataFrame; GC fraction in each sequence
     df.rename(columns={'Pos.': 'Pos'}, inplace=True)
 
-    df_filtered = df[(df.fGC >= 0.45) & (df.fGC <= 0.60) & (df.Hybeff >= 0.6)]  # & (df2.Pos >= 434) & (df2.Pos <= 1841)] #only CDS for oskRC
+    df_filtered = df[(df.fGC >= 0.45) & (df.fGC <= 0.60) & (
+                df.Hybeff >= 0.6)]  # & (df2.Pos >= 434) & (df2.Pos <= 1841)] #only CDS for oskRC
     df_filtered.reset_index(drop=True, inplace=True)
-    df_filtered.to_csv(program_object.save_buffer("[fname]_unfiltered_probes.csv"), sep=',', index=None)
 
-    if not arguments.intermolecular:
-        filtered_df = get_filtered_file(df_filtered, program_object) #idk why only if not intermolecular, but whatever
-    else:   # Additional filtering and chunking for the final filtered file
-        filtered_df = df_filtered.copy()
-
-    filtered_df['Diff'] = filtered_df['Pos'].diff().abs()
-    condition_mask = filtered_df['Diff'] >= 22
-    resulting_filtered_df = filtered_df[condition_mask]
-    resulting_filtered_df = resulting_filtered_df.drop(columns=['Diff'])
-    resulting_filtered_df.to_csv(program_object.save_buffer(f"[fname]final_filtered_file.csv"), index=False)
-
-    return resulting_filtered_df
-
+    df_cols_removed = df_filtered[['Pos', "Oligo(5'->3')", 'Overall (kcal/mol)', 'Tm-Dup (degC)', 'Hybeff', 'fGC']]
+    df_cols_removed.to_csv(program_object.save_buffer("[fname]_possible_matching_probes.csv"), sep=',', index=None,
+                           float_format='%.10g')
+    return df_cols_removed
 def process_list_file(program_object: ProgramObject, oligos):
     output_dir = program_object.output_dir #temp
     fname = program_object.file_stem
@@ -189,6 +176,7 @@ def create_arg_parser():
         prog='smFISH',
         description='Probe design for single-molecule fluorescence in situ hybridization (smFISH), considering secondary structures.')
     parser.add_argument("-f", "--file", type=functools.partial(path_string, suffix=".ct"))
+    parser.add_argument("-cf", "--csv-file", type=functools.partial(path_string, suffix=".csv"), help="For testing. Input a previously outputted all probes csv file") #for testing, speed
     parser.add_argument("-o", "--output-dir", type=functools.partial(path_arg, suffix=""))
     parser.add_argument("-v", "--verbose", action="store_true")
     parser.add_argument("-q", "--quiet", action="store_true")

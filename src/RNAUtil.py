@@ -89,7 +89,7 @@ def get_RNAStructure_directory() -> Path:
 
 def get_program(program: str):
     directory = get_RNAStructure_directory()
-    file = next((file for file in directory.iterdir() if file.stem == program), None)
+    file = next((file for file in directory.iterdir() if file.stem.lower() == program.lower()), None)
     return file or program
 
 #specific to RNAStructure

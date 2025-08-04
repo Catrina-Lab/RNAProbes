@@ -1,10 +1,8 @@
 #python version >=3.9
 from __future__ import annotations
 
-import functools
 import uuid
 from collections.abc import Callable
-from tempfile import SpooledTemporaryFile
 
 from flask import Flask, render_template, request, redirect, url_for, jsonify, Response
 from sys import argv
@@ -14,7 +12,6 @@ from werkzeug.datastructures import FileStorage
 from DelayedProgram import DelayedProgram
 from Program import Program
 
-from src.RNASuiteUtil import ProgramObject
 from src.TFOFinder import tfofinder
 from src.PinMol import pinmol
 from src.smFISH import smFISH

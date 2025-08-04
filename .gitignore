@@ -6,5 +6,5 @@ profile.json
 **/__pycache__/*
 user-files/*
 **/.venv/
+**/.linuxvenv/
 **/venv/
-**/poetry.lock
