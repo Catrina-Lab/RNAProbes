@@ -32,7 +32,6 @@ concentration = 0.25e-6
 gas_constant = 0.001987
 temp_K = 310.15 #37 C or 98.6 F
 min_Hybeff = .6
-os.environ["IS_WEB_APP"] = "TRUE"
 max_webapp_size = 2*1000*1000 if os.environ.get("IS_WEB_APP") else 20*1000*1000 #alg is n^3, so is 1000 larger so basically infinite (if larger, won't even run)
 
 count_weight, hybeff_weight = .5, 7 #change this to modify how the values are weighed. Rarely matters, but sometimes does
