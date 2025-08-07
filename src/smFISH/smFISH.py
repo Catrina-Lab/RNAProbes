@@ -26,17 +26,21 @@ copyright_msg = (("\n" * 6) +
           undscr +
           "\nWARNING: Previous files will be overwritten or appended!\n" +
           undscr)
-
+# so there's a limit on what a webserver will allow
 probe_length = 20
 concentration = 0.25e-6
 gas_constant = 0.001987
 temp_K = 310.15 #37 C or 98.6 F
 min_Hybeff = .6
+os.environ["IS_WEB_APP"] = "TRUE"
+max_webapp_size = 2*1000*1000 if os.environ.get("IS_WEB_APP") else 20*1000*1000 #alg is n^3, so is 1000 larger so basically infinite (if larger, won't even run)
 
-count_weight, hybeff_weight = 1, 7 #change this to modify how the values are weighed. Rarely matters, but sometimes does
+count_weight, hybeff_weight = .5, 7 #change this to modify how the values are weighed. Rarely matters, but sometimes does
 def hybeff_modifier(hybeff) -> float:
     modified_value = (hybeff - min_Hybeff) / (1 - min_Hybeff) #convert min_Hybeff - 1 -> 0-1
     return modified_value*modified_value*modified_value*modified_value
+
+exported_values = dict(maxWebappSize=max_webapp_size) #max file size: 2mb if web app. OligoWalk is O(n^3) and bifold is also bad,
 
 # count_weight, hybeff_weight = 1, 7 #change this to modify how the values are weighed. Rarely matters, but sometimes does
 # def hybeff_modifier(hybeff) -> float:
@@ -49,6 +53,7 @@ def hybeff_modifier(hybeff) -> float:
 def validate_arguments(file_path: Path, arguments: Namespace, **ignore) -> dict:
     validate_arg(parse_file_input(file_path).suffix == ".ct", "The given file must be a valid .ct file")
     validate_arg(Path(file_path).exists(), msg="The ct file must exist")
+    validate_arg(os.path.getsize(file_path) < max_webapp_size, f"The CT file must be below {max_webapp_size / 1000 / 1000} MB when using a webapp")
     validate_arg(hasattr(arguments, 'intermolecular') and arguments.intermolecular is not None, "You must use decide whether to use intermolecular or not")
     return dict()
 
@@ -104,9 +109,6 @@ def get_filtered_file(df: DataFrame, program_object: ProgramObject) -> DataFrame
     #filtered_df.to_csv(program_object.save_buffer("[fname]filtered_file.csv"), index=False)  # Save the result to filtered_file.csv
     return filtered_df
 
-def equilibrium_constant(input):
-    return math.e ** (-(input / (gas_constant*temp_K)))
-
 def process_ct_file(filein, program_object: ProgramObject) -> DataFrame:
     arguments = program_object.arguments
     if not program_object.arguments.csv_file:
@@ -118,6 +120,9 @@ def process_ct_file(filein, program_object: ProgramObject) -> DataFrame:
     filtered_df.to_csv(program_object.save_buffer(f"[fname]_final_filtered_file.csv"), index=False, float_format='%.10g')
 
     return filtered_df
+
+def equilibrium_constant(input):
+    return math.e ** (-(input / (gas_constant*temp_K)))
 
 def get_matching_probes(filein: str, program_object: ProgramObject):
     df = RNAStructureWrapper.oligowalk(Path(filein),

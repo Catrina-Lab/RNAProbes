@@ -1,6 +1,7 @@
 #python version >=3.9
 from __future__ import annotations
 
+import os
 import uuid
 from collections.abc import Callable
 
@@ -22,7 +23,7 @@ import time, io, zipfile, base64
 from pathlib import Path
 
 app = Flask(__name__)
-app.config['TEMPLATES_AUTO_RELOAD'] = True
+app.config['TEMPLATES_AUTO_RELOAD'] = True\
 
 root = Path(__file__).parent
 output_dir = root / "user-files"
@@ -137,7 +138,7 @@ def query_result():
         return f"Can only query a DelayedProgram. {program_name} is not a DelayedProgram", 400
 
 def get_exports():
-    return {"TFOFinder": tfofinder.exported_values, "PinMol": pinmol.exported_values}
+    return {"TFOFinder": tfofinder.exported_values, "PinMol": pinmol.exported_values, "smFISH": smFISH.exported_values}
 
 def run_program(prog_name, error_message_validation="Something went wrong", error_message_program="Something went wrong"):
     # import time

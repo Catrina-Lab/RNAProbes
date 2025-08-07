@@ -33,17 +33,35 @@
   const defaultEndBaseMin = {{1 + exports.PinMol.probeMin}};
   const programsCased = Object.fromEntries(programs.map(e=>[e.toLowerCase(), e])); //easier than changing half the time (and maybe forgetting once)
   const resultUrls = {};
+  const smFISHMaxSize = {{exports.smFISH.maxWebappSize}};
 
   form.addEventListener("submit", e => {
     e.preventDefault();
-    if(formIsValid(e)){
+    if(formIsValid(form)){
       formContainer.classList.add("d-none");
       responseContainer.classList.remove("d-none");
       sendRequests();
     }
   });
-  function formIsValid(){
-    return true; //temp
+  function setScroll(){
+    document.documentElement.style.setProperty("scroll-behavior", "auto", "important")
+    setTimeout(()=>{
+      document.documentElement.style.removeProperty("scroll-behavior");
+    }, 50);
+  }
+  function invalidateForm(element, message){
+    setScroll();
+    element.setCustomValidity(message);
+    element.reportValidity();
+  }
+  function formIsValid(form){
+    const ctFileInput = form.querySelector("#ct-file");
+    if(programsCased["smfish"] && ctFileInput.files[0].size > smFISHMaxSize){
+      invalidateForm(ctFileInput, `CT file too large! It must be below ${smFISHMaxSize / 1000 / 1000} MB if using smFISH. Please choose a smaller file, deselect smFISH, or run smFISH on your own system (view the github repository down below)`);
+    } else {
+        return true; //temp
+    }
+    return false;
   }
   const endBaseInput = form.querySelector("#pinmol-end-base");
   const endBaseText = form.querySelector("#pinmol-end-base-text");
