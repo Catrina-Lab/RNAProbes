@@ -1,8 +1,13 @@
 <div class="request-recieved card shadow-sm mb-4">
   <div class="card-body">
-    <h5 class="card-title text-primary"><i class="fas fa-cogs me-2"></i>{{ program }}</h5>
+    <div class="result-header">
+      <h5 class="card-title text-primary"><i class="fas fa-check-circle me-2"></i>{{ program }}</h5>
+      <span class="page-controls-container">
+        {% include 'pagination.html' %}
+      </span>
+    </div>
     {% if delayed is defined %}
-      <p class="card-text">Your request is being processed, but might take a while. You will be notified when the results are ready. Make sure to download them within 24h.</p>
+      <p class="card-text">Your request is being processed, but might take a while. You will be notified when the results are ready.</p>
     {% else %}
       <p class="card-text">Your request is being processed. You will be notified when the results are ready.</p>
     {% endif %}
@@ -12,6 +17,7 @@
         <span class="visually-hidden">Loading...</span>
       </div>
       <span class="ms-2">In Progress</span>
+      <button class="btn btn-primary ms-auto resubmit-btn" program="{{program}}" type="button">Submit another</button>
     </div>
   </div>
 </div>

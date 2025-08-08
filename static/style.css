@@ -175,3 +175,9 @@ body {
   margin: 0 auto;
   align-items: center;
 }
+
+.result-header{
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 2px;
+}

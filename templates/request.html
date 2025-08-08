@@ -24,6 +24,208 @@
 
 {% block scripts %}
 <script src="{{ url_for('static', filename='program-card.js') }}"></script>
+<script src="{{ url_for('static', filename='util.js') }}"></script>
+<script>
+  const STATUS = createBasicEnum("STATUS", "RECIEVED", "DELAYED_RECIEVED", "COMPLETE", "FAILED");
+  class ProgramQueryHandler{
+
+    static getQueryHandlers(programs){
+      const obj = Object.fromEntries(programs.map(e=>[e.toLowerCase(), new ProgramQueryHandler(e)]));
+      Object.defineProperty(obj, "get", {
+        value: e=>obj[e.toLowerCase()]
+      })
+      return obj;
+    }
+    static indexAttribute = "index";
+    queries = [];
+    currentQueryIndex = 0;
+    constructor(program){
+      this.program = program;  
+      this.renderer = new QueryRenderer(program);
+    }
+    addResult(){
+      const query = new Query(this.program, this.queries.length, this);
+      this.queries.push(query);
+      this.currentQueryIndex = this.queries.length - 1;
+      this.render(query);
+      return query;
+    }
+    render(query){
+      this.renderer.render(query);
+    }
+    show(index, relative = false){
+      if(relative) index = this.currentQueryIndex + index;
+      this.currentQueryIndex = getWrapIndex(this.queries, index);
+      this.renderer.render(this.queries[this.currentQueryIndex], true);
+    }
+    downloadFile(target){
+      const container = target.closest(".single-query-container");
+      const index = parseInt(container.getAttribute(ProgramQueryHandler.indexAttribute));
+      const query = this.queries[index];
+      query.downloadFile(container);
+    }
+    setupResubmit(callback){
+      document.querySelector(`.program-section[program="${this.program}"]`).classList.remove("d-none");
+      callback();
+    }
+  }
+
+  class Query{
+    value = "";
+    url = "";
+    constructor(program, index, parent){
+      this.program = program;
+      this.index = index;
+      this.status = STATUS.RECIEVED;
+      this.parent = parent;
+    }
+    downloadFile(container) {
+      const anchor = container.querySelector(`.download-anchor`);
+      if (anchor && this.url !== "") {
+        anchor.href = this.url;
+        anchor.click();
+      } else if(anchor){
+        throw new Error("Can't download file, no file to download");
+      } else {
+        throw new Error("Can't find anchor, something went wrong");
+      }
+    }
+    render(value, queryStatus = STATUS.COMPLETE){
+      this.value = value;
+      this.status = queryStatus;
+      this.parent.render(this);
+    }
+    async startResponse(response){
+      return new QueryResponse(this, this.program).handleResponse(response);
+    }
+  }
+
+  class QueryRenderer{
+    static getQueryContainerID(query){
+      return `${query.program}-result-container-${query.index}`;
+    }
+
+    currentRenderedQuery = null;
+    program = "";
+    constructor(program){
+      this.program = program;  
+      this.programResponseContainer = document.getElementById(`${program}-response-container`);
+      this.recievedContainer = this.programResponseContainer.querySelector(".request-recieved");
+      this.failedContainer = this.programResponseContainer.querySelector(".request-failed");    
+    }
+    render(query, showOnly = false){
+      this.clearCurrent();
+      if(query.status == STATUS.RECIEVED){
+        this.currentRenderedContainer = this.showRecieved(query);
+      } else if(query.status == STATUS.FAILED){
+        this.currentRenderedContainer = this.showFailed(query);
+      } else {
+        this.currentRenderedContainer = this.renderQuery(query, showOnly);
+      }
+    }
+    renderPaginationNumber(query, container){
+      container.querySelector(".pagNum").textContent = query.index + 1;
+    }
+    showRecieved(query){
+      this.renderPaginationNumber(query, this.recievedContainer);
+      this.recievedContainer.classList.remove("d-none");
+      return this.recievedContainer;
+    }
+    showFailed(query){
+      this.renderPaginationNumber(query, this.failedContainer);
+      this.failedContainer.classList.remove("d-none");
+      this.failedContainer.querySelector(".failed-message").textContent = query.value;
+      return this.failedContainer;
+    }
+    renderQuery(query, showOnly = false){
+      const container = this.getOrCreateQueryContainer(query);
+      container.classList.remove("d-none");
+      if(!showOnly) container.innerHTML = this.parseQueryText(query);
+      return container;
+    }
+    parseQueryText(query){
+      const elem = document.createElement("template");
+      elem.innerHTML = query.value;
+      this.renderPaginationNumber(query, elem.content);
+      return elem.innerHTML;
+    }
+    getOrCreateQueryContainer(query){
+      const container = this.getSingleQueryContainer(query);
+      return container || this.createQueryContainer(query);
+    }
+    createQueryContainer(query){
+      return createElem("div", "single-query-container", this.programResponseContainer, elem=>{
+        elem.id = QueryRenderer.getQueryContainerID(query);
+        elem.setAttribute(ProgramQueryHandler.indexAttribute, query.index);
+      });
+    }
+    getSingleQueryContainer(query){
+      return this.programResponseContainer.querySelector("#" + QueryRenderer.getQueryContainerID(query));
+    }
+    clearCurrent(){
+      if(this.currentRenderedContainer){
+        this.currentRenderedContainer.classList.add("d-none");
+      }
+    }
+  }
+
+  function base64ToUint8Array(encoded) {
+    const binary = atob(encoded);
+    const bytes = new Uint8Array(binary.length);
+    for (let i = 0; i < bytes.length; i++) {
+      bytes[i] = binary.charCodeAt(i);
+    }
+    return bytes;
+  }
+  function sleep(ms) {
+    return new Promise(resolve => setTimeout(resolve, ms));
+  }
+  class QueryResponse{
+    constructor(query, program, response){
+      this.query = query;
+      this.program = program;
+    }
+    render(html, status = STATUS.COMPLETE){
+      this.query.render(html, status);
+    }
+    async handleResponse(response){
+      if(response.status >= 400  && response.status < 600){
+        this.render(await response.text(), STATUS.FAILED)
+      } else {
+        const responseJson = await response.json();
+        this.renderResponseJSON(responseJson);
+      }
+      return this;
+    }
+    renderResponseJSON(json){
+      if(json.status == "running") this.renderDelayedResponse(json);
+      else this.renderResponse(json);
+    }
+    renderResponse(json) {
+      this.saveURL(json.zip);
+      this.render(json.html);
+    }
+    saveURL(zip) {
+      const zipFile = new Blob([base64ToUint8Array(zip)], { type: 'application/zip' });
+      this.query.url = URL.createObjectURL(zipFile);
+    }
+    async renderDelayedResponse(json){
+      if(this.query.status != STATUS.DELAYED_RECIEVED) {
+        this.render(json.html, STATUS.DELAYED_RECIEVED);
+        await sleep(250); //wait a little bit for a failed program to be able to run
+      } else await sleep(2 * 1000);
+      this.queryResponse(json.id);
+    }
+    async queryResponse(id){
+      const response = await this.sendQuery(id);
+      this.handleResponse(response, true);
+    }
+
+    async sendQuery(id){
+      return await fetch(`/query-result?program=${this.program}&id=${id}`)
+    }
+  }
+</script>
 <script>
   const form = document.querySelector("form");
 
@@ -34,15 +236,26 @@
   const programsCased = Object.fromEntries(programs.map(e=>[e.toLowerCase(), e])); //easier than changing half the time (and maybe forgetting once)
   const resultUrls = {};
   const smFISHMaxSize = {{exports.smFISH.maxWebappSize}};
+  const queryHandlers = ProgramQueryHandler.getQueryHandlers(programs);
 
   form.addEventListener("submit", e => {
     e.preventDefault();
     if(formIsValid(form)){
-      formContainer.classList.add("d-none");
-      responseContainer.classList.remove("d-none");
-      sendRequests();
+      const programs = [...document.querySelectorAll('.program-section:not(.d-none)')];
+      swapView(false, programs);
+      sendRequests(programs.map(e=>e.getAttribute("program")));
     }
   });
+  function swapView(toForm = true, programs = []){
+    if(toForm){
+      formContainer.classList.remove("d-none");
+      responseContainer.classList.add("d-none");
+    } else {
+      formContainer.classList.add("d-none");
+      responseContainer.classList.remove("d-none");
+      programs.forEach(e=>e.classList.add("d-none"));
+    }
+  }
   function setScroll(){
     document.documentElement.style.setProperty("scroll-behavior", "auto", "important")
     setTimeout(()=>{
@@ -78,7 +291,7 @@
       if(pinmolProbeLengthInput.value != ""){
         min = parseInt(pinmolProbeLengthInput.value) + (parseInt(startBaseInput.value) || 1);
         //endBaseInput.setAttribute("min", min);
-        endBaseInput.min = min
+        endBaseInput.min = min;
         endBaseInput.textContent = min;
       } else {
         endBaseInput.min = defaultEndBaseMin;
@@ -90,104 +303,43 @@
   setProbeMin();
 
   document.addEventListener('click', e => {
-    const downloadBtn = e.target.closest('[id$="-download-btn"]');
-    if (downloadBtn) {
-      const program = downloadBtn.id.split("-", 1)[0];
-      downloadFile(program);
+    const btn = e.target.closest('button');
+    if(!btn) return;
+    if (btn.classList.contains("download-btn")) {
+      const program = btn.getAttribute("program");
+      queryHandlers.get(program).downloadFile(btn);
+    } else if(btn.classList.contains("resubmit-btn")){
+      const program = btn.getAttribute("program");
+      queryHandlers.get(program).setupResubmit(swapView);
     }
   });
 
-  function sendRequests() {
+  document.addEventListener('click', e => {
+    if (e.target.classList.contains("pagArrow")) {
+      program = e.target.parentNode.getAttribute("program");
+      queryHandlers.get(program).show(parseInt(e.target.getAttribute("value")), e.target.getAttribute("relative") === "true");
+    }
+  });
+
+  function sendRequests(programs) {
     programs.forEach(sendRequest);
   }
-
+  //******************************************************************************
   async function sendRequest(program) {
     program = programsCased[program.toLowerCase()];
     const data = new FormData(form);
+    const query = queryHandlers[program.toLowerCase()].addResult();
     const response = await fetch(`/send-request?program=${program}`, {
       method: "POST",
       body: data,
     });
-    handleResponse(program, response);
-  }
-  async function handleResponse(program, response, isRecur = false){
-    if(response.status >= 400  && response.status < 600){
-      return handleError(program, response, await response.text())
-    } else {
-      const responseJson = await response.json();
-      if(responseJson.status == "running") renderDelayedResponse(program, responseJson, isRecur);
-      else renderResponse(program, responseJson);
-    }
-  }
-  async function handleError(program, response, text){
-    renderFail(program, text);
-    if(response.status != 400) console.error(`Issue when submitting program ${program}: ${text}`);
-    return text
-  }
-  function renderFail(program, text){
-    programResponseContainer = document.getElementById(`${program}-response-container`);
-    programResponseContainer.querySelector(".request-recieved").classList.add("d-none");
-    programResponseContainer.querySelector(".request-failed").classList.remove("d-none");
-    programResponseContainer.querySelector(".failed-message").textContent = text;
-  }
-
-  function renderResponse(program, response) {
-    saveURL(program, response.zip);
-    renderRecievedTemplate(program, response.html);
-  }
-
-  function saveURL(program, zip) {
-    const zipFile = new Blob([base64ToUint8Array(zip)], { type: 'application/zip' });
-    resultUrls[program] = URL.createObjectURL(zipFile);
-  }
-
-  function base64ToUint8Array(encoded) {
-    const binary = atob(encoded);
-    const bytes = new Uint8Array(binary.length);
-    for (let i = 0; i < bytes.length; i++) {
-      bytes[i] = binary.charCodeAt(i);
-    }
-    return bytes;
-  }
-
-  function renderRecievedTemplate(program, html) {
-    programResponseContainer = document.getElementById(`${program}-response-container`);
-    requestRecieved = programResponseContainer.querySelector(".request-recieved");
-    requestRecieved.classList.add("d-none");
-    requestRecieved.insertAdjacentHTML("beforebegin", html); //add before request recieved for easy request swapping
-  }
-
-  function downloadFile(program) {
-    const anchor = document.getElementById(`${program}-download-anchor`);
-    if (anchor && resultUrls[program]) {
-      anchor.href = resultUrls[program];
-      anchor.click();
-    }
-  }
-
-  async function renderDelayedResponse(program, responseJSON, isRecur = false){
-    if(!isRecur) {
-      renderRecievedTemplate(program, responseJSON.html);
-      await sleep(250); //wait a little bit in for a failed program to be able to run
-    } else await sleep(2 * 1000);
-    queryResponse(program, responseJSON.id);
-  }
-
-  function sleep(ms) {
-    return new Promise(resolve => setTimeout(resolve, ms));
-  }
-  async function queryResponse(program, id){
-    response = await sendQuery(program, id);
-    handleResponse(program, response, true);
-  }
-
-  async function sendQuery(program, id){
-    return await fetch(`/query-result?program=${program}&id=${id}`)
+    query.startResponse(response);
   }
 </script>
 {% endblock %}
 
 {% block head_content %}
+<link rel="stylesheet" href="{{ url_for('static', filename='pagination.css') }}">
 <style>
   .program-section {
     background-color: #f8f9fa;

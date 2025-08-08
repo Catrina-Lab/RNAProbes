@@ -36,7 +36,7 @@ max_webapp_size = 2*1000*1000 if os.environ.get("IS_WEB_APP") else 20*1000*1000 
 
 count_weight, hybeff_weight = .5, 7 #change this to modify how the values are weighed. Rarely matters, but sometimes does
 def hybeff_modifier(hybeff) -> float:
-    modified_value = (hybeff - min_Hybeff) / (1 - min_Hybeff) #convert min_Hybeff - 1 -> 0-1
+    modified_value = (hybeff - min_Hybeff) / (1 - min_Hybeff) #convert [min_Hybeff,1] -> [0,1]
     return modified_value*modified_value*modified_value*modified_value
 
 exported_values = dict(maxWebappSize=max_webapp_size) #max file size: 2mb if web app. OligoWalk is O(n^3) and bifold is also bad,
