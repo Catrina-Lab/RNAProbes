@@ -1,10 +1,9 @@
 #python version >=3.9
 from __future__ import annotations
 
-import functools
+import os
 import uuid
 from collections.abc import Callable
-from tempfile import SpooledTemporaryFile
 
 from flask import Flask, render_template, request, redirect, url_for, jsonify, Response
 from sys import argv
@@ -14,7 +13,6 @@ from werkzeug.datastructures import FileStorage
 from DelayedProgram import DelayedProgram
 from Program import Program
 
-from src.RNASuiteUtil import ProgramObject
 from src.TFOFinder import tfofinder
 from src.PinMol import pinmol
 from src.smFISH import smFISH
@@ -25,7 +23,7 @@ import time, io, zipfile, base64
 from pathlib import Path
 
 app = Flask(__name__)
-app.config['TEMPLATES_AUTO_RELOAD'] = True
+app.config['TEMPLATES_AUTO_RELOAD'] = True\
 
 root = Path(__file__).parent
 output_dir = root / "user-files"
@@ -140,7 +138,7 @@ def query_result():
         return f"Can only query a DelayedProgram. {program_name} is not a DelayedProgram", 400
 
 def get_exports():
-    return {"TFOFinder": tfofinder.exported_values, "PinMol": pinmol.exported_values}
+    return {"TFOFinder": tfofinder.exported_values, "PinMol": pinmol.exported_values, "smFISH": smFISH.exported_values}
 
 def run_program(prog_name, error_message_validation="Something went wrong", error_message_program="Something went wrong"):
     # import time

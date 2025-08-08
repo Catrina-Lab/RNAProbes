@@ -1,12 +1,18 @@
 <div class="card shadow-sm mb-4 border-success">
   <div class="card-body">
-    <h5 class="card-title text-success"><i class="fas fa-check-circle me-2"></i>{{ program }}</h5>
+    <div class="result-header">
+      <h5 class="card-title text-success"><i class="fas fa-check-circle me-2"></i>{{ program }}</h5>
+      <span class="page-controls-container">
+        {% include 'pagination.html' %}
+      </span>
+    </div>
     <p class="card-text">Your results for {{ program }} are now ready!</p>
     <div class="d-flex justify-content-end">
+      <button class="btn btn-primary me-2 resubmit-btn" program="{{program}}" type="button">Submit another</button>
       <button class="btn btn-outline-primary me-2 d-none" type="button">View Results</button>
-      <button id="{{program}}-download-btn" class="btn btn-primary" type="button">
+      <button class="btn btn-primary download-btn" program="{{program}}" type="button">
         <i class="fas fa-download me-2"></i>Download
-        <a id="{{program}}-download-anchor" class="d-none" download="{{filename}}" target="_blank"></a>
+        <a class="d-none download-anchor" program="{{program}}" download="{{filename}}" target="_blank"></a>
       </button>
     </div>
   </div>

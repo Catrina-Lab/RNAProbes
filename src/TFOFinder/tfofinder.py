@@ -8,7 +8,7 @@ from pandas import DataFrame
 
 from src.RNASuiteUtil import BufferedProgramObject, ProgramObject, run_command_line
 from src.util import (path_string, validate_arg, parse_file_input,
-                      DiscontinuousRange, input_range, validate_doesnt_throw, input_path, input_path_string)
+                      DiscontinuousRange, input_range, validate_doesnt_throw, input_path, input_path_string, path_arg)
 from src.RNAUtil import CT_to_sscount_df
 
 undscr = ("->" * 40)
@@ -56,13 +56,52 @@ def calculate_result(filein, probe_lengths: DiscontinuousRange, filename="", arg
 
     if should_print(arguments): print('Number of Structures = ' + str(structure_count) + ' \n\n...Please wait...\n')
     #temp
-    consec = get_consecutive_not_ss(probe_lengths, sscount_df)
-    program_object.set_result_args(final_result=get_final_string(filename, probe_lengths, structure_count, consec, sscount_df))
+    all_probes_by_length = get_consecutive_not_ss(probe_lengths, sscount_df)
+    program_object.set_result_args(final_result=get_final_string(filename, probe_lengths, structure_count, all_probes_by_length, sscount_df))
 
     # todo: ask if should add extra newline at end (trivial issue)
     with program_object.open_buffer(f"[fname]_TFO_probes.txt", "w" if arguments.overwrite else 'a') as buffer:
         buffer.write(program_object.result_obj.final_result)
     return program_object
+
+def parse_arguments(args: str | list, from_command_line = True):
+    args = get_argument_parser().parse_args(args if isinstance(args, list) else shlex.split(args))
+    args.from_command_line = from_command_line  # denotes that this is from the command line
+    return args
+
+def run(args="", from_command_line = True):
+    arguments = parse_arguments(args, from_command_line = from_command_line)
+    if should_print(arguments):
+       print(copyright_msg)
+
+    filein = input_path_string(".ct", msg='Enter the ct file path and name: ', fail_message='This file is invalid (either does not exist or is not a .ct file). Please input a valid .ct file: ',
+                        initial_value= arguments.file, retry_if_fail=arguments.from_command_line)
+    mb_userpath, fname, suffix = parse_file_input(filein, arguments.output_dir)
+
+    # probe_length = input_int_in_range(min=probeMin, max=probeMax + 1,
+    #                                   msg=f"Enter the length of TFO probe; a number between {probeMin} and {probeMax} inclusive: ",
+    #                                   fail_message=f'You must type a number between {probeMin} and {probeMax}, try again: ',
+    #                                   initial_value=arguments.probe_length, retry_if_fail=arguments.from_command_line)
+    probe_length = input_range(min=probeMin, max=probeMax + 1,
+                                      msg=f"Enter the length of TFO probe; a number or range between {probeMin} and {probeMax} inclusive: ",
+                                      fail_message=f'You must type a number (or a range) between {probeMin} and {probeMax}, try again: ',
+                                      initial_value=arguments.probe_length, retry_if_fail=arguments.from_command_line)
+    # convert the ct file to a txt
+    with open(filein, 'r') as file:
+        program_object = calculate_result(file, probe_length, filename=filein, arguments=arguments,
+                                             output_dir=mb_userpath)
+
+    if should_print(arguments, is_content_verbose=True):
+        from textwrap import indent
+        print("Results: \n" + indent(program_object.result_obj.final_result, " " * 4))
+    if should_print(arguments):
+        print("Calculation complete. Find the result in " + str(mb_userpath / f"{fname}_TFO_probes.txt"))
+
+#region************************************************************************************************
+#******************************************************************************************************
+#**************************************   Util Functions   ********************************************
+#******************************************************************************************************
+#******************************************************************************************************
 
 def get_program_object(file_stem, arguments, output_dir=None):
     constructor = ProgramObject if arguments.from_command_line else BufferedProgramObject
@@ -133,7 +172,7 @@ def create_arg_parser():
         prog='TDOFinder',
         description='Triplex-forming oligonucleotide (TFO) target designer for RNA.')
     parser.add_argument("-f", "--file", type=path_string)
-    parser.add_argument("-o", "--output-dir", type=functools.partial(path_string, suffix=""))
+    parser.add_argument("-o", "--output-dir", type=functools.partial(path_arg, suffix=""))
     parser.add_argument("-p", "--probe-length", type=DiscontinuousRange.template(probeMin, probeMax+1),
                         metavar=f"[{probeMin}-{probeMax}]",
                         help=f'The length range of TFO probes, {probeMin}-{probeMax} inclusive')
@@ -143,38 +182,12 @@ def create_arg_parser():
     parser.add_argument("-w", "--overwrite", action="store_true",
                         help="Overwrite the returned TFO Probes file. Default is to append")
     return parser
-def parse_arguments(args: str | list, from_command_line = True):
-    args = get_argument_parser().parse_args(args if isinstance(args, list) else shlex.split(args))
-    args.from_command_line = from_command_line  # denotes that this is from the command line
-    return args
 
-def run(args="", from_command_line = True):
-    arguments = parse_arguments(args, from_command_line = from_command_line)
-    if should_print(arguments):
-       print(copyright_msg)
-
-    filein = input_path_string(".ct", msg='Enter the ct file path and name: ', fail_message='This file is invalid (either does not exist or is not a .ct file). Please input a valid .ct file: ',
-                        initial_value= arguments.file, retry_if_fail=arguments.from_command_line)
-    mb_userpath, fname, suffix = parse_file_input(filein, arguments.output_dir)
-
-    # probe_length = input_int_in_range(min=probeMin, max=probeMax + 1,
-    #                                   msg=f"Enter the length of TFO probe; a number between {probeMin} and {probeMax} inclusive: ",
-    #                                   fail_message=f'You must type a number between {probeMin} and {probeMax}, try again: ',
-    #                                   initial_value=arguments.probe_length, retry_if_fail=arguments.from_command_line)
-    probe_length = input_range(min=probeMin, max=probeMax + 1,
-                                      msg=f"Enter the length of TFO probe; a number or range between {probeMin} and {probeMax} inclusive: ",
-                                      fail_message=f'You must type a number (or a range) between {probeMin} and {probeMax}, try again: ',
-                                      initial_value=arguments.probe_length, retry_if_fail=arguments.from_command_line)
-    # convert the ct file to a txt
-    with open(filein, 'r') as file:
-        program_object = calculate_result(file, probe_length, filename=filein, arguments=arguments,
-                                             output_dir=mb_userpath)
-
-    if should_print(arguments, is_content_verbose=True):
-        import textwrap
-        print("Results: \n" + textwrap.indent(program_object.result_obj.final_result, " " * 4))
-    if should_print(arguments):
-        print("Calculation complete. Find the result in " + str(mb_userpath / f"{fname}_TFO_probes.txt"))
+#******************************************************************************************************
+#******************************************************************************************************
+#***********************************   End of Util Functions   ****************************************
+#******************************************************************************************************
+#endregion*********************************************************************************************
 
 if __name__ == "__main__":
     #if we succeed somehow (throught pythonpath, etc)...

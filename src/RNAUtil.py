@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 import platform
 import shlex
 import subprocess
@@ -36,10 +37,10 @@ def convert_ct_to_dataframe(file: IO[str]) -> tuple[DataFrame, int]:
     # dtype={"baseno": int, "base": str, "bs_bind": int}
     try:
         file.seek(0)
-        ct_df = pd.read_csv(file, sep='\\s+', usecols=[0,1,4], names=["baseno", "base", "bs_bind"], engine='python')
+        ct_df = pd.read_csv(file, sep='\\s+', usecols=[0,1,4], names=["baseno", "base", "bs_bind"], engine='python', skiprows=1)
         initial_row_count = len(ct_df)
         ct_df = ct_df[~ct_df["base"].isin(match)]
-        structure_count = initial_row_count - len(ct_df)
+        structure_count = initial_row_count - len(ct_df) + 1 #need to add 1 because we skip the first row (in order to get the correct column count)
         ct_df = ct_df.astype({"baseno": int, "base": str, "bs_bind": int})
         return ct_df, structure_count
     except Exception as e:
@@ -85,20 +86,25 @@ def get_RNAStructure_directory() -> Path:
     global rna_structure_directory
     rna_structure_directory = (rna_structure_directory or
                                base_folder / get_folders().get(f"{platform.system()},{platform.machine()}", "")) #use root if none found, will just be the system
+    if rna_structure_directory != base_folder: os.environ["DATAPATH"] = str(base_folder / "data_tables")
     return rna_structure_directory
 
 def get_program(program: str):
     directory = get_RNAStructure_directory()
-    file = next((file for file in directory.iterdir() if file.stem == program), None)
+    file = next((file for file in directory.iterdir() if file.stem.lower() == program.lower()), None)
     return file or program
 
 #specific to RNAStructure
 def _run_program(program, files_in: list | str | Path, file_out: str | Path, arguments: str = "", remove_input: bool = False):
     files_in = files_in if isinstance(files_in, list) else [files_in]
     try:
-        program = get_program(program)
-        subprocess.check_output([program, *files_in, file_out, *shlex.split(arguments)])
+        program_path = get_program(program)
+        subprocess.check_output([program_path, *files_in, file_out, *shlex.split(arguments)])
         return file_out
+    except subprocess.CalledProcessError as e:
+        print("SUBPROCESS ERROR:")
+        print(e.stderr)
+        raise Exception(f"Error when running program {program}: " + str(e.stderr))
     finally:
         if remove_input: remove_files(*files_in)
 

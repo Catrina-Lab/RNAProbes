@@ -170,14 +170,14 @@ def bounded_int(string, min=None, max=None):
 
 def path_string(string, suffix=".ct"):
     path = Path(string).resolve()
-    if path.is_file() and path.suffix in suffix:  # in returns true if string ==
+    if path.exists() and path.suffix in suffix:  # in returns true if string ==
         return str(path)
     else:
         raise argparse.ArgumentTypeError(f'Invalid file given. File must be an existing {suffix} file')
 
 def path_arg(string, suffix=".ct"):
     path = Path(string).resolve()
-    if path.is_file() and path.suffix in suffix:  # in returns true if string ==
+    if path.exists() and path.suffix in suffix:  # in returns true if string ==
         return path
     else:
         raise argparse.ArgumentTypeError(f'Invalid file given. File must be an existing {suffix} file')

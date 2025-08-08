@@ -1,0 +1,15 @@
+fly.toml
+.git/
+.github/
+.envrc
+Dockerfile
+*.aiexclude
+Temp_files/*
+.idea/
+profile.html
+profile.json
+**/__pycache__/*
+user-files/*
+**/.venv/
+**/.linuxvenv/
+**/venv/

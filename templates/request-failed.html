@@ -1,10 +1,16 @@
 <div class="request-failed card shadow-sm mb-4 d-none border-danger">
   <div class="card-body">
-    <h5 class="card-title text-danger"><i class="fas fa-cogs me-2"></i>{{ program }}</h5>
+    <div class="result-header">
+      <h5 class="card-title text-danger"><i class="fas fa-check-circle me-2"></i>{{ program }}</h5>
+      <span class="page-controls-container">
+        {% include 'pagination.html' %}
+      </span>
+    </div>
     <p class="card-text failed-message"></p>
     <div class="d-flex align-items-center">
       <strong>Status:</strong>
       <span class="ms-2">Failed</span>
+      <button class="btn btn-danger ms-auto resubmit-btn" program="{{program}}" type="button">Submit another</button>
     </div>
   </div>
 </div>

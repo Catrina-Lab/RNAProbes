@@ -36,7 +36,7 @@ class DelayedProgram(Program):
 
     def _run_program(self, kwargs: dict, job_id: UUID, error_message: str="Something went wrong", validate_err_msg: str=None):
         threading.Thread(target=self._run_in_background, args=(kwargs, job_id, error_message, validate_err_msg)).start()
-        Path(self.output_dir / str(job_id) / result_dir_name).mkdir(parents=True, exist_ok=True)
+        # Path(self.output_dir / str(job_id) / result_dir_name).mkdir(parents=True, exist_ok=True)
         return job_id
 
     def _run_in_background(self, kwargs, job_id: UUID, error_message: str="Something went wrong", validate_err_msg: str=None):
@@ -58,7 +58,7 @@ class DelayedProgram(Program):
     def get_current_result(self, output_dir: Path, id: UUID):
         if not output_dir.exists():
             return 400, "Your output has been deleted from the system (or was never ran). Please run it again"
-        if is_empty(output_dir / result_dir_name):
+        if not (output_dir / result_dir_name).exists() or is_empty(output_dir / result_dir_name):
             return json.dumps(dict(status="running", id=str(id)))
 
         return self.send_final_result(output_dir)
