@@ -57,11 +57,6 @@ def validate_arguments(file_path: Path, arguments: Namespace, **ignore) -> dict:
     return dict()
 
 
-def get_missing_arguments(arguments: Namespace) -> None:
-    arguments.intermolecular = input_bool(msg="Do you want to run smFISH in intermolecular mode? (y/n)",
-                                          initial_value=arguments.intermolecular,
-                                          retry_if_fail=arguments.from_command_line)
-
 def calculate_result(file_path : str, arguments: Namespace, output_dir: Path = None, **ignore):
     output_dir, fname, _ = parse_file_input(file_path, output_dir or arguments.output_dir)
     get_missing_arguments(arguments)
@@ -71,6 +66,43 @@ def calculate_result(file_path : str, arguments: Namespace, output_dir: Path = N
     try_intermolecular(program_object, df_filtered)
 
     return program_object
+
+def parse_arguments(args: str | list, from_command_line = True) -> Namespace:
+    args = get_argument_parser().parse_args(args if isinstance(args, list) else shlex.split(args))
+    args.from_command_line = from_command_line  # denotes that this is from the command line
+    args.intermolecular = args.force_intermolecular or args.hybeff or None
+    return args
+
+def run(args="", from_command_line = True):
+    arguments = parse_arguments(args, from_command_line=from_command_line)
+    if should_print(arguments): print(copyright_msg)
+
+    ct_filein = input_path_string(".ct", msg='Enter the ct file path and name: ', fail_message='This file is invalid (either does not exist or is not a .ct file). Please input a valid .ct file: ',
+                        initial_value= arguments.file, retry_if_fail=arguments.from_command_line)
+
+    calculate_result(ct_filein, arguments)
+
+    if arguments.intermolecular:
+        #no filtered_file??
+        print("Check the *final_filtered_file.csv for proposed smFISH probes. However, if not enough probes have been"
+              +" selected given the initial selection criteria or only the CDS is targeted, please review the *filtered_file.csv and *_unfiltered_probes.csv to "
+              +"select additional probes. Moreover, the intermolecular interactions of the probes should be taken into acocunt. Please review the *combined_output.csv file, and eliminate any probes with "
+              + "intermolecular hybdridization free energy change < -10kcal/mol.")
+    else:
+        print("Check the *final_filtered_file.csv for proposed smFISH probes. However, if not enough probes have been "
+              "selected given the initial selection criteria or only the CDS is targeted, please review the *filtered_file.csv "
+              "and *_unfiltered_probes.csv to select additional probes.")
+
+#region************************************************************************************************
+#******************************************************************************************************
+#**************************************   Util Functions   ********************************************
+#******************************************************************************************************
+#******************************************************************************************************
+
+def get_missing_arguments(arguments: Namespace) -> None:
+    arguments.intermolecular = input_bool(msg="Do you want to run smFISH in intermolecular mode? (y/n)",
+                                          initial_value=arguments.intermolecular,
+                                          retry_if_fail=arguments.from_command_line)
 
 def try_intermolecular(program_object: ProgramObject, df_filtered):
     if program_object.arguments.intermolecular:
@@ -194,34 +226,14 @@ def create_arg_parser():
 
     return parser
 
-def parse_arguments(args: str | list, from_command_line = True) -> Namespace:
-    args = get_argument_parser().parse_args(args if isinstance(args, list) else shlex.split(args))
-    args.from_command_line = from_command_line  # denotes that this is from the command line
-    args.intermolecular = args.force_intermolecular or args.hybeff or None
-    return args
-
 def should_print(arguments: Namespace, is_content_verbose = False):
     return arguments and arguments.from_command_line and not arguments.quiet and (not is_content_verbose or arguments.verbose)
 
-def run(args="", from_command_line = True):
-    arguments = parse_arguments(args, from_command_line=from_command_line)
-    if should_print(arguments): print(copyright_msg)
-
-    ct_filein = input_path_string(".ct", msg='Enter the ct file path and name: ', fail_message='This file is invalid (either does not exist or is not a .ct file). Please input a valid .ct file: ',
-                        initial_value= arguments.file, retry_if_fail=arguments.from_command_line)
-
-    calculate_result(ct_filein, arguments)
-
-    if arguments.intermolecular:
-        #no filtered_file??
-        print("Check the *final_filtered_file.csv for proposed smFISH probes. However, if not enough probes have been"
-              +" selected given the initial selection criteria or only the CDS is targeted, please review the *filtered_file.csv and *_unfiltered_probes.csv to "
-              +"select additional probes. Moreover, the intermolecular interactions of the probes should be taken into acocunt. Please review the *combined_output.csv file, and eliminate any probes with "
-              + "intermolecular hybdridization free energy change < -10kcal/mol.")
-    else:
-        print("Check the *final_filtered_file.csv for proposed smFISH probes. However, if not enough probes have been "
-              "selected given the initial selection criteria or only the CDS is targeted, please review the *filtered_file.csv "
-              "and *_unfiltered_probes.csv to select additional probes.")
+#******************************************************************************************************
+#******************************************************************************************************
+#***********************************   End of Util Functions   ****************************************
+#******************************************************************************************************
+#endregion*********************************************************************************************
 
 if __name__ == "__main__":
     #if we succeed somehow (throught pythonpath, etc)...

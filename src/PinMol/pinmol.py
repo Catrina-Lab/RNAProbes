@@ -72,6 +72,35 @@ def calculate_result(filein, probe_length: int, filename: str, arguments: Namesp
     write_result_string(program_object, arguments=arguments)
     return program_object
 
+def parse_arguments(args: list | str, from_command_line = True):
+    args = get_argument_parser().parse_args(args if isinstance(args, list) else shlex.split(args))
+    args.from_command_line = from_command_line  # denotes that this is from the command line
+    return args
+
+def run(args: str | list="", from_command_line: bool = True):
+    arguments = parse_arguments(args, from_command_line)
+    if should_print(arguments): print(copyright_msg)
+    file_name = input_path_string(".ct", msg='Enter the ct file path and name: ', fail_message='This file is invalid (either does not exist or is not a .ct file). Please input a valid .ct file: ',
+                        initial_value= arguments.file, retry_if_fail=arguments.from_command_line)
+
+    probe_length = arguments.probes or input_int_in_range(min=probeMin, max=probeMax + 1,
+                                                          msg=f"Enter the length of a probe; a number between {probeMin} and {probeMax} inclusive: ",
+                                                          fail_message=f'You must type a number between {probeMin} and {probeMax}, try again: ')
+
+    calculate_result(open(file_name, "r"), probe_length, file_name, arguments)
+
+    if should_print(arguments):
+        print("\n" + "This information can be also be found in the file Final_molecular_beacons.csv" + "\n")
+        print(
+            "\n" + "Check the structure for the selected probes using your favorite browser by opening the corresponding SVG files!")
+        print("\n" + "If no SVG files are found, increase the number of probes and/or target region!")
+
+#region************************************************************************************************
+#******************************************************************************************************
+#**************************************   Util Functions   ********************************************
+#******************************************************************************************************
+#******************************************************************************************************
+
 def write_result_string(program_object: ProgramObject, arguments: Namespace):
     result_str = get_result_string(program_object.result_obj)
     with program_object.open_buffer(f"[fname]_Final_molecular_beacons.csv", "a") as add_output:
@@ -123,19 +152,6 @@ def regionTarget(df: DataFrame, probe_length: int,  arguments: Namespace) -> tup
     return tg_start, tg_end
 
 
-def itersplit_into_x_chunks(argum, chunksize, start=0, end=None): #split sequence in chunks of probe size
-    """
-    Split an sliceable object into chunks of a certain size
-    :param argum: the sliceable object
-    :param chunksize: the size of chunks to split the object into
-    :param start: the index to start on
-    :param end: the index to end on, exclusive
-    :return:
-    """
-    end = end or len(argum)
-    for pos in range(start, end-chunksize+1):
-        yield argum[pos:pos+chunksize]
-
 basecomplement = str.maketrans({'A': 'U', 'C': 'G', 'G': 'C', 'U': 'A'})
 def reverse_complement(seq): #generate RNA complement
     return seq.translate(basecomplement)[::-1]
@@ -154,7 +170,7 @@ def sequence_probe(index: int, probe_len: int, structure_count: int, sscount_df:
 
     tml = int(mt.Tm_NN(complement, dnac1=50000, dnac2=50000, Na=100, nn_table=mt.RNA_NN1, saltcorr=1))
 
-    per = int((probe.count('A') + probe.count('G')) / probe_len * 100)
+    per = int((probe.count('C') + probe.count('G')) / probe_len * 100)
 
     probe_sscounts = sscount_df.sscount[index:index + probe_len]
     avg_sscount = probe_sscounts.sum() / (probe_len * structure_count)
@@ -163,7 +179,7 @@ def sequence_probe(index: int, probe_len: int, structure_count: int, sscount_df:
 
 def seqProbes(sscount_df: DataFrame, probe_length: int, structure_count: int, start=0, end = None):
     bases = ''.join(sscount_df.base)
-    probes = (sequence_probe(i, probe_length, structure_count, sscount_df, bases) for i in range(start, end))
+    probes = (sequence_probe(i, probe_length, structure_count, sscount_df, bases) for i in range(start, end-probe_length+1))
     df = DataFrame.from_records(probes, columns=["Base Number", "%GC", "sscount", "Probe Sequence", "Tm"])
     return df #put together all data as indicated in header
 
@@ -376,6 +392,19 @@ def get_stem(probe_seq: str, probe_length: int):
     else:
         return 'CGAGC'
 
+def itersplit_into_x_chunks(argum, chunksize, start=0, end=None): #split sequence in chunks of probe size
+    """
+    Split an sliceable object into chunks of a certain size
+    :param argum: the sliceable object
+    :param chunksize: the size of chunks to split the object into
+    :param start: the index to start on
+    :param end: the index to end on, exclusive
+    :return:
+    """
+    end = end or len(argum)
+    for pos in range(start, end-chunksize+1):
+        yield argum[pos:pos+chunksize]
+
 def try_create_svg(index: int, program_object: ProgramObject) -> bool:
     seq_path, ct_path, svg_path = [f"{svg_dir_name}/[fname]_{str(index+1)}.seq", f"{svg_dir_name}/[fname]_{str(index+1)}.ct",
                                    f"{svg_dir_name}/[fname]_{str(index+1)}.svg"]
@@ -438,32 +467,15 @@ def create_arg_parser():
                        help="Don't use blast alignment information to determine cross homology.")
     return parser
 
-def parse_arguments(args: list | str, from_command_line = True):
-    args = get_argument_parser().parse_args(args if isinstance(args, list) else shlex.split(args))
-    args.from_command_line = from_command_line  # denotes that this is from the command line
-    return args
-
 def should_print(arguments: Namespace | ProgramObject, is_content_verbose: bool = False):
     if isinstance(arguments, ProgramObject): arguments = arguments.arguments
     return arguments and arguments.from_command_line and not arguments.quiet and (not is_content_verbose or arguments.verbose)
 
-def run(args: str | list="", from_command_line: bool = True):
-    arguments = parse_arguments(args, from_command_line)
-    if should_print(arguments): print(copyright_msg)
-    file_name = input_path_string(".ct", msg='Enter the ct file path and name: ', fail_message='This file is invalid (either does not exist or is not a .ct file). Please input a valid .ct file: ',
-                        initial_value= arguments.file, retry_if_fail=arguments.from_command_line)
-
-    probe_length = arguments.probes or input_int_in_range(min=probeMin, max=probeMax + 1,
-                                                          msg=f"Enter the length of a probe; a number between {probeMin} and {probeMax} inclusive: ",
-                                                          fail_message=f'You must type a number between {probeMin} and {probeMax}, try again: ')
-
-    calculate_result(open(file_name, "r"), probe_length, file_name, arguments)
-
-    if should_print(arguments):
-        print("\n" + "This information can be also be found in the file Final_molecular_beacons.csv" + "\n")
-        print(
-            "\n" + "Check the structure for the selected probes using your favorite browser by opening the corresponding SVG files!")
-        print("\n" + "If no SVG files are found, increase the number of probes and/or target region!")
+#******************************************************************************************************
+#******************************************************************************************************
+#***********************************   End of Util Functions   ****************************************
+#******************************************************************************************************
+#endregion*********************************************************************************************
 
 if __name__ == "__main__":
     #if we succeed somehow (throught pythonpath, etc)...
