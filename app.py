@@ -28,7 +28,7 @@ app.config['TEMPLATES_AUTO_RELOAD'] = True\
 root = Path(__file__).parent
 output_dir = root / "user-files"
 pinmol_output_dir, sm_fish_output_dir = output_dir / "pinmol", output_dir / "smfish"
-
+program_names = ["TFOFinder", "PinMol", "smFISH"]
 
 @app.errorhandler(500)
 def application_error(error):
@@ -116,7 +116,7 @@ def form():
         if not programs:
             # Redirect back to home if no programs were selected. Needed if you navigate directly to it without using index.html first.
             return redirect(url_for('index'))
-        return render_template('request.html', programs=programs, exports=get_exports())
+        return render_template('request.html', programs=programs, all_programs=program_names, exports=get_exports())
     # If accessed via GET, redirect to home
     return redirect(url_for('index'))
 
