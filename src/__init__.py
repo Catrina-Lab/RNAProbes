@@ -1,1 +1,2 @@
-__all__= ["util.py"]
+from rnaprobes.util import ValidationError
+__all__ = ["ValidationError"]
