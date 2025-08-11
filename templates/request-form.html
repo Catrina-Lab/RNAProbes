@@ -9,8 +9,8 @@
       <div class="card p-4 shadow-sm">
         <h2 class="mb-4">Selected Programs:</h2>
         <div class="d-flex justify-content-center mb-4">
-          {% for program in programs %}
-            <span class="badge bg-primary fs-6 me-2">{{ program }}</span>
+          {% for program in all_programs %}
+            <span class="badge bg-primary fs-6 me-2 program-selector-button {{ '' if program in programs else 'program-unselected' }}" program="{{ program }}">{{ program }}</span>
           {% endfor %}
         </div>
 
@@ -21,19 +21,16 @@
             <div class="form-text">Upload the CT file for your RNA sequence.</div>
           </div>
 
-          {% if 'TFOFinder' in programs %}
-          <div id="TFOFinder-section" class="program-section mb-4" program="TFOFinder">
+          <fieldset id="TFOFinder-section" class="program-section mb-4 {{ '' if 'TFOFinder' in programs else 'd-none' }}" program="TFOFinder" {{"" if 'TFOFinder' in programs else 'disabled' }}>
             <h3 class="fs-4"><i class="fas fa-bullseye me-2"></i>TFOFinder Options</h3>
             <div class="mb-3">
               <label for="tfofinder-probe-length" class="form-label">Probe Length</label>
               <input type="text" class="form-control" id="tfofinder-probe-length" name="tfofinder-probe-length" placeholder="e.g., 9" required>
               <div class="form-text">Choose a number or range between {{exports.TFOFinder.probeMin}} and {{exports.TFOFinder.probeMax}}.</div>
             </div>
-          </div>
-          {% endif %}
+          </fieldset>
 
-          {% if 'PinMol' in programs %}
-          <div id="PinMol-section" class="program-section mb-4" program="PinMol">
+          <fieldset id="PinMol-section" class="program-section mb-4 {{ '' if 'PinMol' in programs else 'd-none' }}" program="PinMol" {{"" if 'PinMol' in programs else 'disabled' }}>
             <h3 class="fs-4"><i class="fas fa-map-pin me-2"></i>PinMol Options</h3>
             <div class="mb-3">
               <label for="pinmol-probe-length" class="form-label">Probe Length</label>
@@ -53,11 +50,9 @@
               </div>
               <div class="form-text">The maximum value for both start and end base is your CT file's maximum base</div>
             </div>
-          </div>
-          {% endif %}
+          </fieldset>
 
-          {% if 'smFISH' in programs %}
-          <div id="smFISH-section" class="program-section mb-4" program="smFISH">
+          <fieldset id="smFISH-section" class="program-section mb-4 {{ '' if 'smFISH' in programs else 'd-none' }}" program="smFISH" {{"" if 'smFISH' in programs else 'disabled' }}>
             <h3 class="fs-4"><i class="fas fa-search-plus me-2"></i>smFISH Options</h3>
             <div class="program-card program-card-inline">
               <div class="inline-card-body">
@@ -68,10 +63,8 @@
                 <input type="checkbox" name="smFISH-intermolecular" value="intermolecular" class="form-check-input">
               </div>
             </div>
-          </div>
-          {% endif %}
+          </fieldset>
           
-          <input type="hidden" name="programs" value="{{ programs|join(',') }}">
           <div class="d-grid">
             <button type="submit" class="btn btn-primary btn-lg proceed-btn">Submit Request</button>
           </div>

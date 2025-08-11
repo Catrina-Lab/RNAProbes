@@ -150,7 +150,7 @@ body {
   transition: all 0.3s ease;
 }
 
-.card .badge:hover {
+.card .badge:not(.program-selector-button):hover {
   transform: translateY(-2px);
   box-shadow: 0 4px 10px rgba(0,0,0,0.15);
 }
@@ -181,3 +181,20 @@ body {
     justify-content: space-between;
     margin-bottom: 2px;
 }
+
+.program-selector-button{
+  cursor: pointer;
+}
+.program-selector-button:not(.program-unselected){
+  transform: translateY(-1px);
+  box-shadow: 0 4px 10px rgba(0,0,0,0.15);
+}
+
+.program-unselected {
+    background-color: #9c9ced !important;
+    box-shadow: inset 0px 0px 5px 0px #5b5bb7 !important;
+}
+/* .program-unselected:active {
+    background-color: #9c9ced !important;
+    box-shadow: inset 0px 0px 6px 4px #6262b7 !important;
+} */
