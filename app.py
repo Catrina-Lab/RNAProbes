@@ -11,7 +11,6 @@ from werkzeug.datastructures import FileStorage
 
 from DelayedProgram import DelayedProgram
 from Program import Program
-
 from src.rnaprobes.TFOFinder import tfofinder
 from src.rnaprobes.PinMol import pinmol
 from src.rnaprobes.smFISH import smFISH
