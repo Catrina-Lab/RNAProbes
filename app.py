@@ -1,11 +1,10 @@
 #python version >=3.9
 from __future__ import annotations
 
-import os
 import uuid
 from collections.abc import Callable
 
-from flask import Flask, render_template, request, redirect, url_for, jsonify, Response
+from flask import Flask, render_template, request, redirect, url_for
 from sys import argv
 
 from werkzeug.datastructures import FileStorage
@@ -13,13 +12,13 @@ from werkzeug.datastructures import FileStorage
 from DelayedProgram import DelayedProgram
 from Program import Program
 
-from src.TFOFinder import tfofinder
-from src.PinMol import pinmol
-from src.smFISH import smFISH
-from src.util import optional_argument, get_folder_as_zip, ValidationError, safe_remove_tree
+from src.rnaprobes.TFOFinder import tfofinder
+from src.rnaprobes.PinMol import pinmol
+from src.rnaprobes.smFISH import smFISH
+from src.rnaprobes.util import optional_argument, safe_remove_tree
 from werkzeug.utils import secure_filename
 from functools import partial
-import time, io, zipfile, base64
+import time, io, zipfile
 from pathlib import Path
 
 app = Flask(__name__)
@@ -77,17 +76,17 @@ def smFISH_get_args(req, output_dir: Path) -> dict:
     save_to_file(req.files.get("ct-file"), file_path)
     return dict(file_path = file_path,
         output_dir = output_dir,
-        arguments = smFISH.parse_arguments("-d "+ ("-i" if req.form.get("smFISH-intermolecular") else "-ni"), from_command_line=False)
+        arguments = smFISH.parse_arguments("-d " + ("-i" if req.form.get("smFISH-intermolecular") else "-ni"), from_command_line=False)
          )
 
 program_dict = { #get args, validate args, return value
     'tfofinder': Program("TFOFinder",
-                        lambda req, _: dict(filein = req.files.get("ct-file").stream,
-                                      probe_lengths = req.form.get("tfofinder-probe-length"), #validation is in validate_arguments
-                                      filename = secure_filename(req.files.get("ct-file").filename),
-                                         arguments = tfofinder.parse_arguments("", from_command_line=False)),
-                tfofinder.validate_arguments,
-                  partial(close_file, tfofinder.calculate_result), root_dir=root, folder_not_needed=True),
+                         lambda req, _: dict(filein = req.files.get("ct-file").stream,
+                                             probe_lengths = req.form.get("tfofinder-probe-length"),  #validation is in validate_arguments
+                                             filename = secure_filename(req.files.get("ct-file").filename),
+                                             arguments = tfofinder.parse_arguments("", from_command_line=False)),
+                         tfofinder.validate_arguments,
+                         partial(close_file, tfofinder.calculate_result), root_dir=root, folder_not_needed=True),
     'pinmol': Program("PinMol", lambda req, output_dir: dict(filein= req.files.get("ct-file").stream,
                                    probe_length = req.form.get("pinmol-probe-length", type=int),
                                    output_dir = output_dir,
@@ -95,7 +94,7 @@ program_dict = { #get args, validate args, return value
                                     arguments = pinmol.parse_arguments(f"-nb -w"
                                                                         f"{optional_argument(req, 'pinmol-start-base', '-s', default_value=1)}"
                                                                         f"{optional_argument(req, 'pinmol-end-base', '-e', default_value=-1)}",
-                                                                        from_command_line=False)
+                                                                       from_command_line=False)
 ), pinmol.validate_arguments, partial(close_file, pinmol.calculate_result), output_dir=pinmol_output_dir, root_dir=root),
     'smfish': DelayedProgram("smFISH", smFISH_get_args, smFISH.validate_arguments, smFISH.calculate_result, output_dir=sm_fish_output_dir, root_dir=root)
 }

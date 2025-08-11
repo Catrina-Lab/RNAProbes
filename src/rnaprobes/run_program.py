@@ -4,11 +4,11 @@ from pathlib import Path
 
 sys.path.append(str(Path(__file__).resolve().parent.parent))
 
-from src.PinMol import pinmol
-from src.RNASuiteUtil import run_command_line
-from src.TFOFinder import tfofinder
-from src.smFISH import smFISH
-from src.util import input_value
+from rnaprobes.PinMol import pinmol
+from rnaprobes.RNASuiteUtil import run_command_line
+from rnaprobes.TFOFinder import tfofinder
+from rnaprobes.smFISH import smFISH
+from rnaprobes.util import input_value
 
 
 programs = {

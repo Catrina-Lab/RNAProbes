@@ -9,9 +9,9 @@ from flask import Response, jsonify, render_template, request
 from Program import Program
 import json
 
-from src.RNASuiteUtil import ProgramObject
-from src.run_program import programs
-from src.util import ValidationError, is_empty, safe_remove_tree
+from src.rnaprobes.RNASuiteUtil import ProgramObject
+from src.rnaprobes.run_program import programs
+from src.rnaprobes.util import ValidationError, is_empty, safe_remove_tree
 
 result_dir_name = "program-result"
 error_file = "error.json"

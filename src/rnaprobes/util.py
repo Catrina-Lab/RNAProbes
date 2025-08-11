@@ -194,7 +194,7 @@ def get_folder_as_zip(folder_path: Path) -> bytes:
     return zip_buffer.getvalue()
 
 ParsedFile = namedtuple("ParsedFile", ["parent", "stem", "suffix"])
-def parse_file_input(filein, output_dir = None) -> ParsedFile:
+def parse_file_input(filein: str | Path, output_dir = None) -> ParsedFile:
     filein_path = Path(filein).resolve()  # Convert the filein to a Path object and resolve its full path
     mb_userpath = output_dir or filein_path.parent  # Use the parent directory of the input file to save all files
     fname = filein_path.stem
