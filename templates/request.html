@@ -11,8 +11,8 @@
   </div>
   <div class="row justify-content-center">
     <div class="col-lg-8">
-      {% for program in programs %}
-        <div id="{{program}}-response-container">
+      {% for program in all_programs %}
+        <div id="{{program}}-response-container" class="program-response-container d-none">
           {% include 'request-failed.html' %}
           {% include 'request-received.html' %}
         </div>
@@ -26,8 +26,13 @@
 <script src="{{ url_for('static', filename='program-card.js') }}"></script>
 <script src="{{ url_for('static', filename='util.js') }}"></script>
 <script>
+  const programs = {{ all_programs | tojson }};
+  const initialSelectedPrograms = {{programs | tojson}};
+</script>
+<script>
   const STATUS = createBasicEnum("STATUS", "RECIEVED", "DELAYED_RECIEVED", "COMPLETE", "FAILED");
   class ProgramQueryHandler{
+    static selectedPrograms = Object.fromEntries(initialSelectedPrograms.map(e=>[e,true]));
 
     static getQueryHandlers(programs){
       const obj = Object.fromEntries(programs.map(e=>[e.toLowerCase(), new ProgramQueryHandler(e)]));
@@ -35,6 +40,12 @@
         value: e=>obj[e.toLowerCase()]
       })
       return obj;
+    }
+    static getSelectedPrograms(){
+      return Object.keys(ProgramQueryHandler.selectedPrograms);
+    }
+    static isProgramSelected(program){
+      return ProgramQueryHandler.selectedPrograms.hasOwnProperty(program);
     }
     static indexAttribute = "index";
     queries = [];
@@ -64,9 +75,21 @@
       const query = this.queries[index];
       query.downloadFile(container);
     }
-    setupResubmit(callback){
-      document.querySelector(`.program-section[program="${this.program}"]`).classList.remove("d-none");
-      callback();
+    select(){
+      const section = document.querySelector(`.program-section[program="${this.program}"]`);
+      const button = document.querySelector(`.program-selector-button[program="${this.program}"]`);
+      button.classList.remove("program-unselected");
+      section.classList.remove("d-none");
+      section.removeAttribute("disabled");
+      ProgramQueryHandler.selectedPrograms[this.program] = true;
+    }
+    deselect(){
+      const section = document.querySelector(`.program-section[program="${this.program}"]`);
+      const button = document.querySelector(`.program-selector-button[program="${this.program}"]`);
+      button.classList.add("program-unselected");
+      section.classList.add("d-none");
+      section.disabled = true;
+      delete ProgramQueryHandler.selectedPrograms[this.program];
     }
   }
 
@@ -122,6 +145,7 @@
       } else {
         this.currentRenderedContainer = this.renderQuery(query, showOnly);
       }
+      this.programResponseContainer.classList.remove("d-none");
     }
     renderPaginationNumber(query, container){
       container.querySelector(".pagNum").textContent = query.index + 1;
@@ -231,19 +255,22 @@
 
   const responseContainer = document.getElementById("response-container");
   const formContainer = document.getElementById("form-container");
-  const programs = {{ programs | tojson }};
-  const defaultEndBaseMin = {{1 + exports.PinMol.probeMin}};
   const programsCased = Object.fromEntries(programs.map(e=>[e.toLowerCase(), e])); //easier than changing half the time (and maybe forgetting once)
+
+  const defaultEndBaseMin = {{1 + exports.PinMol.probeMin}};
   const resultUrls = {};
   const smFISHMaxSize = {{exports.smFISH.maxWebappSize}};
   const queryHandlers = ProgramQueryHandler.getQueryHandlers(programs);
 
+  function programSelected(program){
+    return ProgramQueryHandler.selectedPrograms[program.toLowerCase()];
+  }
   form.addEventListener("submit", e => {
     e.preventDefault();
     if(formIsValid(form)){
-      const programs = [...document.querySelectorAll('.program-section:not(.d-none)')];
+      const programs = ProgramQueryHandler.getSelectedPrograms();
+      sendRequests(programs);
       swapView(false, programs);
-      sendRequests(programs.map(e=>e.getAttribute("program")));
     }
   });
   function swapView(toForm = true, programs = []){
@@ -253,7 +280,7 @@
     } else {
       formContainer.classList.add("d-none");
       responseContainer.classList.remove("d-none");
-      programs.forEach(e=>e.classList.add("d-none"));
+      programs.forEach(e=>queryHandlers.get(e).deselect());
     }
   }
   function setScroll(){
@@ -269,7 +296,7 @@
   }
   function formIsValid(form){
     const ctFileInput = form.querySelector("#ct-file");
-    if(programsCased["smfish"] && ctFileInput.files[0].size > smFISHMaxSize){
+    if(programSelected("smfish") && ctFileInput.files[0].size > smFISHMaxSize){
       invalidateForm(ctFileInput, `CT file too large! It must be below ${smFISHMaxSize / 1000 / 1000} MB if using smFISH. Please choose a smaller file, deselect smFISH, or run smFISH on your own system (view the github repository down below)`);
     } else {
         return true; //temp
@@ -287,16 +314,14 @@
   });
 
   function setProbeMin(){
-    if(programsCased["pinmol"]){
-      if(pinmolProbeLengthInput.value != ""){
-        min = parseInt(pinmolProbeLengthInput.value) + (parseInt(startBaseInput.value) || 1);
-        //endBaseInput.setAttribute("min", min);
-        endBaseInput.min = min;
-        endBaseInput.textContent = min;
-      } else {
-        endBaseInput.min = defaultEndBaseMin;
-        endBaseText.textContent = defaultEndBaseMin;
-      }
+    if(pinmolProbeLengthInput.value != ""){
+      min = parseInt(pinmolProbeLengthInput.value) + (parseInt(startBaseInput.value) || 1);
+      //endBaseInput.setAttribute("min", min);
+      endBaseInput.min = min;
+      endBaseInput.textContent = min;
+    } else {
+      endBaseInput.min = defaultEndBaseMin;
+      endBaseText.textContent = defaultEndBaseMin;
     }
   }
 
@@ -310,7 +335,8 @@
       queryHandlers.get(program).downloadFile(btn);
     } else if(btn.classList.contains("resubmit-btn")){
       const program = btn.getAttribute("program");
-      queryHandlers.get(program).setupResubmit(swapView);
+      queryHandlers.get(program).select();
+      swapView();
     }
   });
 
@@ -318,6 +344,14 @@
     if (e.target.classList.contains("pagArrow")) {
       program = e.target.parentNode.getAttribute("program");
       queryHandlers.get(program).show(parseInt(e.target.getAttribute("value")), e.target.getAttribute("relative") === "true");
+    } else if(e.target.classList.contains("program-selector-button")){
+      program = e.target.getAttribute("program");
+      const selected = !e.target.classList.toggle("program-unselected");
+      if(selected){
+        queryHandlers.get(program).select();
+      } else {
+        queryHandlers.get(program).deselect();
+      }
     }
   });
 
