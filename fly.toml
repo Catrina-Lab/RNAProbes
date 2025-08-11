@@ -1,9 +1,9 @@
-# fly.toml app configuration file generated for rnaprobes-holy-night-6947 on 2025-08-04T12:26:03-04:00
+# fly.toml app configuration file generated for rnaprobes on 2025-08-11T12:55:55-04:00
 #
 # See https://fly.io/docs/reference/configuration/ for information about how to use this file.
 #
 
-app = 'rnaprobes-holy-night-6947'
+app = 'rnaprobes'
 primary_region = 'ewr'
 
 [build]
