@@ -67,11 +67,6 @@ def get_zip_bytes(filename: str, **kwargs) -> bytes:
     file_obj.seek(0)
     return file_obj.getvalue()
 
-def get_result_temp(program: str, result: str, **kwargs) -> tuple[bytes, str]:
-    zip_file = get_zip_bytes("tempfile", **{program: (".txt", result)})
-    filename = f"TempResult-{program}.zip"
-    return zip_file, filename
-
 def save_to_file(file_storage: FileStorage, path: Path, parent_exist_ok = True):
     path.parent.mkdir(parents=True, exist_ok=parent_exist_ok) #not needed in this case
     file_storage.save(path)

@@ -1,6 +1,6 @@
 [project]
-name = "RNAProbesSrc"
-description = "Files for modeling RNA Probes"
+name = "RNAProbesTools"
+description = "Source files for modeling RNA Probes"
 version = "0.0.1"
 authors = [
     {name = "Irina Catrina"},

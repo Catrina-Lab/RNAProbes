@@ -16,4 +16,4 @@ COPY . .
 
 ENV IS_WEB_APP=TRUE
 RUN find /app/src/RNAStructure_Binaries/Linux64 -type f -exec chmod +x {} \;
-CMD ["/app/.venv/bin/python3", "-m", "flask", "run", "--host=0.0.0.0", "--port=8080"]
+CMD ["/app/.venv/bin/python3", "-m", "gunicorn", "w", "4", "app:app", "-b", "0.0.0.0:8080"]
