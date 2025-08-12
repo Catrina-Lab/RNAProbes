@@ -4,7 +4,7 @@ on:
     types:
       - closed
     branches:
-      - server    # change to main if needed
+      - server
 jobs:
   deploy:
     if: github.event.pull_request.merged == true
