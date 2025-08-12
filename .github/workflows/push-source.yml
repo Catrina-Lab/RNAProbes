@@ -19,7 +19,7 @@ jobs:
         with:
           fetch-depth: 0  # subtree needs full history
       - name: Setup SSH agent and add deploy key
-        uses: webfactory/ssh-agent@v0.8.1
+        uses: webfactory/ssh-agent@v0.9.0
         with:
           ssh-private-key: ${{ secrets.PUSH_KEY }}
       - name: Set git author to PR author
