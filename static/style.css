@@ -28,6 +28,9 @@
   --card-shadow: var(--inline-card-shadow);
   --card-hover-shadow: var(--inline-card-hover-shadow);
 }
+.p-4-5 {
+  padding: 2rem !important;
+}
 body {
   background-color: var(--background-color);
   color: var(--text-color);
