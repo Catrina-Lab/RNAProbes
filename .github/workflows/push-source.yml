@@ -12,6 +12,8 @@ jobs:
     if: github.event.pull_request.merged == true
     runs-on: ubuntu-latest
     name: Push to rnaprobessrc
+    permissions:
+      contents: write
     steps:
       - uses: actions/checkout@v4
 
