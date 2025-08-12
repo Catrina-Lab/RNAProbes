@@ -1,15 +1,19 @@
 from __future__ import annotations
+
+import argparse
 import shlex
 import sys
 from collections.abc import Iterable
+from pathlib import Path
+from typing import IO
 
 from Bio.SeqUtils import MeltingTemp as mt
 from pandas import DataFrame
 
-from src.RNASuiteUtil import BufferedProgramObject, ProgramObject, run_command_line
-from src.util import (path_string, validate_arg, parse_file_input,
+from ..RNASuiteUtil import BufferedProgramObject, ProgramObject, run_command_line
+from ..util import (path_string, validate_arg, parse_file_input,
                       DiscontinuousRange, input_range, validate_doesnt_throw, input_path, input_path_string, path_arg)
-from src.RNAUtil import CT_to_sscount_df
+from ..RNAUtil import CT_to_sscount_df
 
 undscr = ("->" * 40)
 copyright_msg = ("\n" * 5) + (" \x1B[3m TFOFinder\x1B[0m  Copyright (C) 2022  Irina E. Catrina\n"
@@ -38,7 +42,7 @@ def validate_arguments(probe_lengths: str, filename="", **ignore) -> dict:
 
 #todo: add support for sscount csv
 
-def calculate_result(filein, probe_lengths: DiscontinuousRange, filename="", arguments=None, output_dir = None) -> ProgramObject:
+def calculate_result(filein: IO[str], probe_lengths: DiscontinuousRange, filename: str="", arguments: argparse.Namespace =None, output_dir: Path = None) -> ProgramObject:
     """
     Find TFO probes
     This method should be inside a with expression in order to close the given file

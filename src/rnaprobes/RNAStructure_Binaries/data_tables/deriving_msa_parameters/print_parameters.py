@@ -83,13 +83,13 @@ for i in comb:
 			# N-:wc
 			big_dic.update({i+j:.6})
 
-f = open('wc_nc_stack_dg','r')
+f = open('wc_nc_stack_dg', 'r')
 g = f.readlines()
 for i in g:
 	big_dic[i.split()[0]] = float(i.split()[1])
 f.close()
 
-f = open('wc_wc_stack_dg','r')
+f = open('wc_wc_stack_dg', 'r')
 g = f.readlines()
 for i in g:
 	big_dic[i.split()[0]] = float(i.split()[1])

@@ -1,0 +1,36 @@
+name: Push
+
+on:
+  pull_request:
+    types:
+      - closed
+    branches:
+      - main
+
+jobs:
+  push:
+    if: github.event.pull_request.merged == true
+    runs-on: ubuntu-latest
+    name: Push to rnaprobessrc
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # subtree needs full history
+      - name: Setup SSH agent and add deploy key
+        uses: webfactory/ssh-agent@v0.9.0
+        with:
+          ssh-private-key: ${{ secrets.PUSH_KEY }}
+      - name: Set git author to PR author
+        run: |
+            AUTHOR_NAME="${{ github.event.pull_request.user.login }}"
+            AUTHOR_ID="${{ github.event.pull_request.user.id }}"
+            AUTHOR_EMAIL="${AUTHOR_ID}+${AUTHOR_NAME}@users.noreply.github.com"
+            git config user.name "$AUTHOR_NAME"
+            git config user.email "$AUTHOR_EMAIL"
+
+      - name: Add api remote origin
+        run: |
+          git remote add rnaprobessource git@github.com:Catrina-Lab/RNAProbesSource.git
+          git subtree push --prefix src/rnaprobes rnaprobessource main

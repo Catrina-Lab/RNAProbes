@@ -10,10 +10,10 @@ import math
 from pathlib import Path
 from pandas import DataFrame, Series
 
-from src.RNASuiteUtil import run_command_line, ProgramObject
-from src.RNAUtil import RNAStructureWrapper
-from src.smFISH.ReverseDijkstra import ReverseDijkstra
-from src.util import path_string, path_arg, input_bool, validate_arg, parse_file_input, input_path_string
+from ..RNASuiteUtil import run_command_line, ProgramObject
+from ..RNAUtil import RNAStructureWrapper
+from ..smFISH.ReverseDijkstra import ReverseDijkstra
+from ..util import path_string, path_arg, input_bool, validate_arg, parse_file_input, input_path_string
 
 undscr = ("->" * 40) + "\n"
 copyright_msg = (("\n" * 6) +
@@ -57,7 +57,7 @@ def validate_arguments(file_path: Path, arguments: Namespace, **ignore) -> dict:
     return dict()
 
 
-def calculate_result(file_path : str, arguments: Namespace, output_dir: Path = None, **ignore):
+def calculate_result(file_path : str | Path, arguments: Namespace, output_dir: Path = None, **ignore):
     output_dir, fname, _ = parse_file_input(file_path, output_dir or arguments.output_dir)
     get_missing_arguments(arguments)
     program_object = ProgramObject(output_dir=output_dir, file_stem=fname, arguments=arguments)

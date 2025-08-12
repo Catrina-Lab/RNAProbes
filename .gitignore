@@ -8,3 +8,4 @@ user-files/*
 **/.venv/
 **/.linuxvenv/
 **/venv/
+**/.poetry/
