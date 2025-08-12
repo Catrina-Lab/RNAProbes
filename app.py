@@ -141,5 +141,17 @@ def run_program(prog_name, error_message_validation="Something went wrong", erro
     # print(((time.time_ns() - prev) // 1_000) / 1_000)
     return result
 
+@app.route('/legal')
+def legal():
+    return render_template('legal.html')
+
+@app.route('/about')
+def about():
+    return render_template('about.html')
+
+@app.route('/contact')
+def contact():
+    return render_template('contact.html')
+
 if __name__ == '__main__':
     app.run(debug= (True if len(argv) > 1 else False)) #use debug if any commmand line arguments are inputted

@@ -1,36 +1,43 @@
-
 <!doctype html>
 <html lang="en">
-  <head>
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>RNA Tools</title>
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
-    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>RNA Tools{% block titleAddition %}{% endblock %}</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
   {% block head_content %}{% endblock %}
-  </head>
-  <body>
-    <nav class="navbar navbar-expand-lg">
-      <div class="container">
-        <a class="navbar-brand" href="/">
-          <i class="fas fa-dna"></i>
-          RNA Tools
-        </a>
-      </div>
-    </nav>
+</head>
 
-    <div class="container content-wrapper">
-    {% block content %}{% endblock %}
+<body>
+  <nav class="navbar navbar-expand-lg">
+    <div class="container">
+      <a class="navbar-brand" href="/">
+        <i class="fas fa-dna"></i>
+        RNA Tools
+      </a>
     </div>
+  </nav>
 
-    <footer class="footer">
-      <div class="container text-center">
-        <p class="mb-0">&copy; 2025 RNA Tools. All Rights Reserved.</p>
-      </div>
-    </footer>
+  <div class="container content-wrapper">
+    {% block content %}{% endblock %}
+  </div>
 
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
-    {% block scripts %}{% endblock %}
-  </body>
+  <footer class="footer">
+    <ul class="nav justify-content-center border-bottom pb-3 mb-3">
+      <li class="nav-item"><a href="/" class="nav-link px-2 text-body-secondary">Home</a></li>
+      <li class="nav-item"><a href="{{ url_for('legal') }}" class="nav-link px-2 text-body-secondary">Legal Statement</a></li>
+      <li class="nav-item"><a href="{{ url_for('about') }}" class="nav-link px-2 text-body-secondary">About</a></li>
+      <li class="nav-item"><a href="https://github.com/Catrina-Lab/RNAProbes" class="nav-link px-2 text-body-secondary">Github</a></li>
+      <li class="nav-item"><a href="{{ url_for('contact') }}" class="nav-link px-2 text-body-secondary">Contact Us</a></li>
+    </ul>
+    <p class="text-center text-body-secondary">© 2025 RNA Probes. All Rights Reserved.</p>
+  </footer>
+
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+  {% block scripts %}{% endblock %}
+</body>
+
 </html>

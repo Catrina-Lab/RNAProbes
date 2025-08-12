@@ -9,7 +9,7 @@ from flask import Response, jsonify, render_template
 
 from src.rnaprobes.RNASuiteUtil import ProgramObject
 from src.rnaprobes.util import safe_remove_tree
-from src import ValidationError
+from src.rnaprobes.util import ValidationError
 import traceback
 
 def send_error_response(error: BaseException, **kwargs):
