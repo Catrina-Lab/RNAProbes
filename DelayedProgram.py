@@ -9,7 +9,7 @@ from Program import Program
 import json
 
 from src.rnaprobes.util import is_empty
-from src import ValidationError
+from src.rnaprobes.util import ValidationError
 
 result_dir_name = "program-result"
 error_file = "error.json"

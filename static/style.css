@@ -1,6 +1,18 @@
 
 @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;600;700&display=swap');
 
+@media only screen and (max-width: 400px) {
+  #buttons {
+    flex-direction: column;
+    align-items: center;
+    row-gap: 4px;
+  }
+  #buttons > span {
+    width: 120px;
+  }
+}
+
+
 :root {
   --primary-color: #0a58ca;
   --secondary-color: #6c757d;
@@ -42,8 +54,9 @@ body {
 
 .footer {
   background-color: var(--card-background);
-  padding: 2rem 0;
+  padding-top: 2rem;
   margin-top: 4rem;
+  padding-bottom: 1rem;
   box-shadow: 0 -4px 15px rgba(0, 0, 0, 0.05);
 }
 
@@ -184,6 +197,7 @@ body {
 
 .program-selector-button{
   cursor: pointer;
+  user-select: none;
 }
 .program-selector-button:not(.program-unselected){
   transform: translateY(-1px);
