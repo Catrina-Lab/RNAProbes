@@ -1,0 +1,23 @@
+name: Push
+
+on:
+  pull_request:
+    types:
+      - closed
+    branches:
+      - main
+
+jobs:
+  push:
+    if: github.event.pull_request.merged == true
+    runs-on: ubuntu-latest
+    name: Push to rnaprobessrc
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Add api remote origin
+        run: |
+          git remote add rnaprobessource https://github.com/Catrina-Lab/RNAProbesSource.git
+      - name: Deploy api to repo
+        run: |
+          git subtree push --prefix src/rnaprobes rnaprobessource main

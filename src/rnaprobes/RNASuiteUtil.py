@@ -11,8 +11,8 @@ from io import UnsupportedOperation
 from pathlib import Path
 import io
 
-from src import util
-from src.util import remove_if_exists, ValidationError, safe_remove_tree, is_empty
+import rnaprobes.util
+from rnaprobes.util import remove_if_exists, ValidationError, safe_remove_tree, is_empty
 
 
 def run_command_line(run: Callable, *args, **kwargs):

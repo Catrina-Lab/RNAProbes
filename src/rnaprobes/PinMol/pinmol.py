@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 from argparse import Namespace
 import sys
+from typing import IO
 
 import pandas as pd
 from Bio.SeqUtils import MeltingTemp as mt
@@ -11,11 +12,11 @@ from pathlib import Path
 from Bio.Blast import NCBIXML
 from pandas import DataFrame
 
-from src.RNASuiteUtil import ProgramObject, run_command_line
-from src.util import (input_int_in_range, bounded_int, path_string, path_arg, remove_if_exists,
+from rnaprobes.RNASuiteUtil import ProgramObject, run_command_line
+from rnaprobes.util import (input_int_in_range, bounded_int, path_string, path_arg, remove_if_exists,
                       remove_files, validate_arg, validate_range_arg, parse_file_input, ValidationError, input_value,
                       input_path_string, input_path)
-from src.RNAUtil import CT_to_sscount_df, RNAStructureWrapper
+from rnaprobes.RNAUtil import CT_to_sscount_df, RNAStructureWrapper
 
 probeMin = 18
 probeMax = 26
@@ -43,14 +44,14 @@ copyright_msg = (("\n" * 6) +
 match = ["ENERGY", "dG"]  # find header rows in ct file
 
 
-def validate_arguments(probe_length: int, filename, arguments: Namespace, **ignore) -> dict:
+def validate_arguments(probe_length: int, filename: str, arguments: Namespace, **ignore) -> dict:
     validate_arg(parse_file_input(filename).suffix == ".ct", "The given file must be a valid .ct file")
     validate_range_arg(probe_length, probeMin, probeMax + 1, "probe length")
     validate_range_arg(arguments.start, min=1, name="start base")
     validate_range_arg(arguments.end, min=arguments.start + probe_length, name="end base", extra_predicate=lambda x: x == -1)
     return {}
 
-def calculate_result(filein, probe_length: int, filename: str, arguments: Namespace, output_dir: Path = None):
+def calculate_result(filein: IO[str], probe_length: int, filename: str, arguments: Namespace, output_dir: Path = None):
     output, stem, _ =  parse_file_input(filename, output_dir or arguments.output_dir)
     program_object = ProgramObject(output, stem, arguments, file_name = filename, probe_length=probe_length)
     with filein as file:

@@ -927,6 +927,24 @@ socks = ["PySocks (>=1.5.6,!=1.5.7)"]
 use-chardet-on-py3 = ["chardet (>=3.0.2,<6)"]
 
 [[package]]
+name = "rnaprobestools"
+version = "0.0.1"
+description = "Source files for modeling RNA Probes"
+optional = false
+python-versions = ">= 3.9"
+groups = ["main"]
+files = []
+develop = false
+
+[package.dependencies]
+Bio = "*"
+pandas = "*"
+
+[package.source]
+type = "directory"
+url = "src"
+
+[[package]]
 name = "six"
 version = "1.17.0"
 description = "Python 2 and 3 compatibility utilities"
@@ -1057,4 +1075,4 @@ type = ["pytest-mypy"]
 [metadata]
 lock-version = "2.1"
 python-versions = "^3.9"
-content-hash = "c6fa02c22cb03b5e05c14aab383a2a9157c2b2dacf64a983b191eaaa51a4448f"
+content-hash = "f1226e3ecd47dc41f9bf91b77d84261da8c11aacccfd54e0a877327781bd5031"
