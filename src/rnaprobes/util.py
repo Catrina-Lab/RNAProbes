@@ -6,15 +6,23 @@ import shutil
 import zipfile
 from collections import namedtuple
 from collections.abc import Callable
+from datetime import timedelta
 from pathlib import Path
 import argparse
 import os
+from typing import IO
+
 
 class ValidationError(Exception):
     pass
 
 class DiscontinuousRange:
-    def __init__(self, *items: int | range, range_str: str = None, min_value: int = None, max_value: int = None):
+    @staticmethod
+    def parse(range_str: str = None, min_value: int = None, max_value: int = None, force_increasing = False):
+        items = range_str.replace(" ", "").split(',')
+        return DiscontinuousRange(*items, min_value=min_value, max_value=max_value, force_increasing=force_increasing)
+
+    def __init__(self, *items: int | range | str, min_value: int = None, max_value: int = None, force_increasing = False):
         """
             Creates a discontinous range generator. Items are given in the order that they are inputted into the range. Use either *items or range_str
             :param items: a collection of elements to turn into a range
@@ -23,8 +31,8 @@ class DiscontinuousRange:
             :param max_value: for user-input, the maximum allowed value in the DiscontinuousRange (exclusive)
             :return:
         """
-        if len(items) == 0: items = range_str.replace(" ", "").split(',')
         self.items = [self._get_and_verify(item, min_value=min_value, max_value=max_value) for item in items]
+        if force_increasing and not range_is_strictly_increasing(self.items): raise ValueError('The given ranges must be increasing (both themselves and relative to each other)')
 
     @staticmethod
     def _get_and_verify(item: str | int | range, min_value: int = None, max_value: int = None):
@@ -35,9 +43,9 @@ class DiscontinuousRange:
         raise ValueError(f"Range {range_obj} is not between {min_value or 'negative infinity'} inclusive and {max_value or 'infinity'} exclusive")
 
     @staticmethod
-    def template(min_value = None, max_value = None, input_string = True):
-        if input_string: return lambda x: DiscontinuousRange(range_str=x, min_value=min_value, max_value=max_value)
-        return lambda *x: DiscontinuousRange(*x, min_value=min_value, max_value=max_value)
+    def template(min_value = None, max_value = None, input_string = True, force_increasing=False):
+        if input_string: return lambda x: DiscontinuousRange.parse(range_str=x, min_value=min_value, max_value=max_value, force_increasing=force_increasing)
+        return lambda *x: DiscontinuousRange(*x, min_value=min_value, max_value=max_value, force_increasing=force_increasing)
 
     def __iter__(self):
         return (i for item in self.items for i in item)
@@ -49,6 +57,22 @@ class DiscontinuousRange:
 
     def __repr__(self):
         return f"DiscontinuousRange({str(self)})"
+
+def _get_range(item: str | range | int) -> range:
+    if isinstance(item, range): return item
+    if isinstance(item, int): return range(item, item+1)
+
+    return parse_range_str(item)
+
+def parse_range_str(range_str: str, delim: str =":"):
+    pair = re.split(delim, range_str)  # may only be one item, but that's OK
+    return range(int(pair[0]), int(pair[-1]) + 1)
+
+def range_is_strictly_increasing(ranges: list[range]):
+    for i, range in enumerate(ranges):
+        if range.step < 0: return False
+        if i != len(ranges) - 1 and range.stop > ranges[i+1].start: return False
+    return True
 
 def identity(x):
     return x
@@ -74,11 +98,11 @@ def input_int_in_range(min: int = None, max: int = None, msg : str = None, fail_
     return input_value(msg, mapper=int, initial_value=initial_value, predicate = lambda x: ((min is None or x >= min) and (max is None or x < max)) or extra_predicate(x),
                        fail_message = fail_message, retry_if_fail=retry_if_fail)
 
-def input_range(min: int = None, max: int = None, msg : str = None, fail_message : str = None,
+def input_range(min: int = None, max: int = None, force_increasing = False, msg : str = None, fail_message : str = None,
                        initial_value = None, retry_if_fail=True) -> DiscontinuousRange:
     fail_message = fail_message or f"Please input a range contained between {min} (inclusive) and {max} (exclusive)."
     msg = msg or f"Input a range contained between {min} (inclusive) and {max} (exclusive): "
-    return input_value(msg, mapper=DiscontinuousRange.template(min_value=min, max_value=max), initial_value=initial_value,
+    return input_value(msg, mapper=DiscontinuousRange.template(min_value=min, max_value=max, force_increasing=force_increasing), initial_value=initial_value,
                        fail_message = fail_message, retry_if_fail=retry_if_fail)
 
 def input_bool(true_vals: str | list[str] = "y,yes,true,t", false_vals: str | list[str] = "n,no,false,f", msg : str = None, fail_message : str = None,
@@ -146,6 +170,10 @@ def is_not_below_min(min, *values):
 def is_below_max(max, *values):
     return all(max is None or value < max for value in values)
 
+def is_in_bound(min, max, *values):
+    return is_not_below_min(min, *values) and is_below_max(max, *values)
+
+
 def optional_argument(request, arg_name: str, cmd_line_name: str = None, default_value = None, type: Callable =None):
     if cmd_line_name is not None:
         if request.form[arg_name] != "":
@@ -207,12 +235,36 @@ def safe_remove_tree(folder: Path, root_dir): #just to be really safe when remov
     else:
         raise ValueError(f"The given folder {folder} is not a child of root folder {root_dir}")
 
-def _get_range(item: str | range | int) -> range:
-    if isinstance(item, range): return item
-    if isinstance(item, int): return range(item, item+1)
+def read_lines_reversed(file: IO[bytes]):
+    try:  # catch OSError in case of a one line file
+        file.seek(0, os.SEEK_END)
+        pos = file.tell()
+        while pos > 0:
+            pos -= 1
+            file.seek(pos, os.SEEK_SET)
+            if file.read(1) == b'\n':
+                file.seek(pos+1, os.SEEK_SET)
+                yield file.readline().decode().rstrip('\n')
+    except (OSError, ValueError):
+        pass
+    file.seek(0, os.SEEK_SET)
+    yield file.readline().decode().rstrip('\n')
 
-    pair = item.split('-')  # may only be one item, but that's OK
-    return range(int(pair[0]), int(pair[-1])+1)
+def format_timedelta(td: timedelta, include_seconds : bool= True) -> str:
+    total_seconds = int(td.total_seconds())
+    days, remainder = divmod(total_seconds, 60 * 60 * 24)   # 86400 seconds in a day
+    hours, remainder = divmod(remainder, 60 * 60)       # 3600 seconds in an hour
+    minutes, seconds = divmod(remainder, 60)
+
+    parts = []
+    if days: parts.append(f"{days} day{'s' if days != 1 else ''}")
+    if hours: parts.append(f"{hours} hour{'s' if hours != 1 else ''}")
+    if minutes: parts.append(f"{minutes} minute{'s' if minutes != 1 else ''}")
+    if seconds and include_seconds: parts.append(f"{seconds} second{'s' if seconds != 1 else ''}")
+
+    if not parts: parts.append("0 seconds" if include_seconds else "0 minutes")
+
+    return ", ".join(parts)
 
 _Colors = dict(
     RED='\033[91m',
@@ -233,4 +285,9 @@ def print_style(msg, *colors):
     print("".join(_Colors[color.upper()] for color in colors) + msg + _Colors['ENDC'])
 
 if __name__ == "__main__":
-    print("Debug") #debug
+    print("Util should not be ran unless debugging")
+    def get_lines_r(f):
+        with open(f, "rb") as file:
+            print(list(read_lines_reversed(file)))
+
+    print("Debug") #place breakpoint here

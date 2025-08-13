@@ -96,6 +96,7 @@ program_dict = { #get args, validate args, return value
                                                                        from_command_line=False)
 ), pinmol.validate_arguments, partial(close_file, pinmol.calculate_result), output_dir=pinmol_output_dir, root_dir=root),
     'smfish': DelayedProgram("smFISH", smFISH_get_args, smFISH.validate_arguments, smFISH.calculate_result, output_dir=sm_fish_output_dir, root_dir=root)
+    .set_extra_notification_string_callback(lambda args: smFISH.get_size_warning(args["nucleotide_length"]))
 }
 
 @app.route('/')
