@@ -3,7 +3,7 @@ name = "RNAProbes"
 version = "0.0.1"
 description = "Webserver for modeling RNA Probes"
 authors = ["Irina Catrina", "Avi Kohn"]
-license = "GPL-3.0-or-later"
+license = "GPL-2.0-only"
 readme = "README.md"
 package-mode = false
 
