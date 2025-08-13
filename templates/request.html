@@ -60,11 +60,11 @@
       const query = new Query(this.program, this.queries.length, this);
       this.queries.push(query);
       this.currentQueryIndex = this.queries.length - 1;
-      this.render(query);
+      this.render(query, true);
       return query;
     }
-    render(query){
-      this.renderer.render(query);
+    render(query, forceShow = false){
+      this.renderer.render(query, undefined, forceShow);
     }
     show(index, relative = false){
       if(relative) index = this.currentQueryIndex + index;
@@ -138,34 +138,42 @@
       this.recievedContainer = this.programResponseContainer.querySelector(".request-recieved");
       this.failedContainer = this.programResponseContainer.querySelector(".request-failed");    
     }
-    render(query, showOnly = false){
-      this.clearCurrent();
-      if(query.status == STATUS.RECIEVED){
-        this.currentRenderedContainer = this.showRecieved(query);
-      } else if(query.status == STATUS.FAILED){
-        this.currentRenderedContainer = this.showFailed(query);
-      } else {
-        this.currentRenderedContainer = this.renderQuery(query, showOnly);
+    render(query, showOnly = false, forceShow = true){ //forceShow allows for background modification
+      forceShow = forceShow || query == this.currentRenderedQuery || this.currentRenderedQuery === null;
+      let container = this.setContainerValue(query, showOnly, forceShow);
+      if(forceShow) {
+        this.clearCurrent();
+        this.currentRenderedContainer = container;
+        this.currentRenderedContainer.classList.remove("d-none");
+        this.currentRenderedQuery = query;
       }
       this.programResponseContainer.classList.remove("d-none");
+    }
+    setContainerValue(query, showOnly, forceShow){
+      if(query.status == STATUS.RECIEVED ){
+        return this.tryShowRecieved(query, forceShow);
+      } else if(query.status == STATUS.FAILED){
+        return this.tryShowFailed(query, forceShow);
+      } else {
+        return this.renderQuery(query, showOnly); //should be in bg unless don't need
+      }
     }
     renderPaginationNumber(query, container){
       container.querySelector(".pagNum").textContent = query.index + 1;
     }
-    showRecieved(query){
-      this.renderPaginationNumber(query, this.recievedContainer);
-      this.recievedContainer.classList.remove("d-none");
+    tryShowRecieved(query, forceShow){
+      if(forceShow) this.renderPaginationNumber(query, this.recievedContainer);
       return this.recievedContainer;
     }
-    showFailed(query){
-      this.renderPaginationNumber(query, this.failedContainer);
-      this.failedContainer.classList.remove("d-none");
-      this.failedContainer.querySelector(".failed-message").textContent = query.value;
+    tryShowFailed(query, forceShow){
+      if(forceShow){
+        this.renderPaginationNumber(query, this.failedContainer);
+        this.failedContainer.querySelector(".failed-message").textContent = query.value;
+      }
       return this.failedContainer;
     }
     renderQuery(query, showOnly = false){
       const container = this.getOrCreateQueryContainer(query);
-      container.classList.remove("d-none");
       if(!showOnly) container.innerHTML = this.parseQueryText(query);
       return container;
     }
@@ -180,7 +188,7 @@
       return container || this.createQueryContainer(query);
     }
     createQueryContainer(query){
-      return createElem("div", "single-query-container", this.programResponseContainer, elem=>{
+      return createElem("div", "single-query-container d-none", this.programResponseContainer, elem=>{
         elem.id = QueryRenderer.getQueryContainerID(query);
         elem.setAttribute(ProgramQueryHandler.indexAttribute, query.index);
       });
