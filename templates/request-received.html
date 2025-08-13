@@ -7,7 +7,12 @@
       </span>
     </div>
     {% if delayed is defined %}
-      <p class="card-text">Your request is being processed, but might take a while. You will be notified when the results are ready.</p>
+      <p class="card-text">Your request is being processed, but might take a while. You will be notified when the results are ready.
+        {% if extra_notification is defined and extra_notification != ""%}
+          <br> Note: {{extra_notification}}
+        {% endif %}
+      </p>
+
     {% else %}
       <p class="card-text">Your request is being processed. You will be notified when the results are ready.</p>
     {% endif %}

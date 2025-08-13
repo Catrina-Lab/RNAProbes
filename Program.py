@@ -55,8 +55,8 @@ class Program:
         try:
             job_id, output_dir = self.set_id()
             kwargs = self._get_args(request, output_dir)
-            modified_kwargs = self._validate_args(kwargs, validate_err_msg)
-            result = self._run_program(kwargs | modified_kwargs, job_id, runtime_err_msg, validate_err_msg=validate_err_msg)
+            kwargs = kwargs | self._validate_args(kwargs, validate_err_msg) #join the result with kwargs
+            result = self._run_program(kwargs, job_id, runtime_err_msg, validate_err_msg=validate_err_msg)
             return self._get_response(result, **kwargs)
         except BaseException as e:
             return send_error_response(e, **kwargs)

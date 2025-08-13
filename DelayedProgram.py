@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import threading
+from collections.abc import Callable
 from pathlib import Path
 from uuid import UUID
 
@@ -27,6 +28,7 @@ def send_error_from_file(path: Path):
         return data['message'], data['code'] if data['message'] != "" else data['code']
 
 class DelayedProgram(Program):
+    get_extra_notification = lambda x: ""
     #result = self._run_program(kwargs | modified_kwargs, runtime_err_msg, validate_err_msg=validate_err_msg)
             #return self._get_response(result, **kwargs)
     def _remove_directory(self, output_dir):
@@ -51,7 +53,7 @@ class DelayedProgram(Program):
 
     def _get_response(self, id: UUID, **kwargs) -> Response:
         return jsonify(id=str(id), status="running", html=render_template(
-            'request-received.html', program=self.name, delayed=True))
+            'request-received.html', program=self.name, delayed=True, extra_notification = self.get_extra_notification(kwargs)))
 
     def get_current_result(self, output_dir: Path, id: UUID):
         if not output_dir.exists():
@@ -72,3 +74,7 @@ class DelayedProgram(Program):
                     return self._get_response_from_zip(file.read(), path.name)
         finally:
             super()._remove_directory(output_dir)
+
+    def set_extra_notification_string_callback(self, func: Callable[dict, str]):
+        self.get_extra_notification = func
+        return self

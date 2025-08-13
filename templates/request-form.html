@@ -8,7 +8,7 @@
     <div class="col-lg-8">
       <div class="card p-4 shadow-sm">
         <h2 class="mb-4">Selected Programs:</h2>
-        <div class="d-flex justify-content-center mb-4">
+        <div id="program-selector-button-container" class="d-flex justify-content-center mb-4">
           {% for program in all_programs %}
             <span class="badge bg-primary fs-6 me-2 program-selector-button {{ '' if program in programs else 'program-unselected' }}" program="{{ program }}">{{ program }}</span>
           {% endfor %}
@@ -25,7 +25,7 @@
             <h3 class="fs-4"><i class="fas fa-bullseye me-2"></i>TFOFinder Options</h3>
             <div class="mb-3">
               <label for="tfofinder-probe-length" class="form-label">Probe Length</label>
-              <input type="text" class="form-control" id="tfofinder-probe-length" name="tfofinder-probe-length" placeholder="e.g., 9" required>
+              <input type="text" class="form-control" id="tfofinder-probe-length" name="tfofinder-probe-length" placeholder="e.g., 9 or 5,7:10" required>
               <div class="form-text">Choose a number or range between {{exports.TFOFinder.probeMin}} and {{exports.TFOFinder.probeMax}}.</div>
             </div>
           </fieldset>
