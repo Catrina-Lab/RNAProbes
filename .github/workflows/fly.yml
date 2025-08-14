@@ -1,13 +1,10 @@
 name: Fly Deploy
 on:
-  pull_request:
-    types:
-      - closed
+  push:
     branches:
       - server
 jobs:
   deploy:
-    if: github.event.pull_request.merged == true
     name: Deploy app
     runs-on: ubuntu-latest
     concurrency: deploy-group    # optional: ensure only one action runs at a time

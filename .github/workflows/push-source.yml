@@ -1,17 +1,14 @@
 name: Push
 
 on:
-  pull_request:
-    types:
-      - closed
+  push:
     branches:
       - main
 
 jobs:
   push:
-    if: github.event.pull_request.merged == true
     runs-on: ubuntu-latest
-    name: Push to rnaprobessrc
+    name: Push to RNAProbesSource
     permissions:
       contents: write
     steps:
