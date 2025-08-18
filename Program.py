@@ -7,7 +7,7 @@ from uuid import UUID
 
 from flask import Response, jsonify, render_template
 
-from src.rnaprobes.RNASuiteUtil import ProgramObject
+from src.rnaprobes.RNAProbesUtil import ProgramObject
 from src.rnaprobes.util import safe_remove_tree
 from src.rnaprobes.util import ValidationError
 import traceback

@@ -11,7 +11,7 @@ import math
 from pathlib import Path
 from pandas import DataFrame, Series
 
-from ..RNASuiteUtil import run_command_line, ProgramObject
+from ..RNAProbesUtil import run_command_line, ProgramObject
 from ..RNAUtil import RNAStructureWrapper, get_ct_nucleotide_length
 from ..smFISH.ReverseDijkstra import ReverseDijkstra
 from ..util import path_string, path_arg, input_bool, validate_arg, parse_file_input, input_path_string, \
@@ -19,10 +19,10 @@ from ..util import path_string, path_arg, input_bool, validate_arg, parse_file_i
 
 undscr = ("->" * 40) + "\n"
 copyright_msg = (("\n" * 6) +
-          f'smFISH_HybEff program  Copyright (C) 2022  Irina E. Catrina\n' +
+          f'smFISH_HybEff program  Copyright (C) 2025 Avi Kohn, 2022  Irina E. Catrina\n' +
           'This program comes with ABSOLUTELY NO WARRANTY;\n' +
           'This is free software, and you are welcome to redistribute it\n' +
-          'under certain conditions; for details please read the GNU_GPL.txt file.\n\n' +
+          'under certain conditions; for details please read the LICENSE.txt file.\n\n' +
           "Feel free to use the CLI or to run the program directly with command line arguments \n" +
           "(view available arguments with --help).\n\n" +
           undscr +

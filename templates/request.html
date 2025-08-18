@@ -393,6 +393,10 @@
     });
     query.startResponse(response);
   }
+
+  window.onbeforeunload = function() {
+    return true;
+  };
 </script>
 {% endblock %}
 

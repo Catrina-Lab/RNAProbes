@@ -10,16 +10,16 @@ from typing import IO
 from Bio.SeqUtils import MeltingTemp as mt
 from pandas import DataFrame
 
-from ..RNASuiteUtil import BufferedProgramObject, ProgramObject, run_command_line
+from ..RNAProbesUtil import BufferedProgramObject, ProgramObject, run_command_line
 from ..util import (path_string, validate_arg, parse_file_input,
                       DiscontinuousRange, input_range, validate_doesnt_throw, input_path, input_path_string, path_arg)
 from ..RNAUtil import CT_to_sscount_df
 
 undscr = ("->" * 40)
-copyright_msg = ("\n" * 5) + (" \x1B[3m TFOFinder\x1B[0m  Copyright (C) 2022  Irina E. Catrina\n"
+copyright_msg = ("\n" * 5) + (" \x1B[3m TFOFinder\x1B[0m  Copyright (C) 2025 Avi Kohn, 2022  Irina E. Catrina\n"
       "This program comes with ABSOLUTELY NO WARRANTY;\n"
       "This is free software, and you are welcome to redistribute it\n"
-      "under certain conditions; for details please read the GNU_GPL.txt file.\n\n"
+      "under certain conditions; for details please read the LICENSE.txt file.\n\n"
       "Feel free to use the CLI or to run the program directly with command line arguments \n"
       "(view available arguments with --help).\n\n"
       f"{undscr}\n\n"
@@ -28,7 +28,7 @@ copyright_msg = ("\n" * 5) + (" \x1B[3m TFOFinder\x1B[0m  Copyright (C) 2022  Ir
       f"{undscr}")
 
 probeMin = 4
-probeMax = 30
+probeMax = 30 #inclusive
 exported_values = {"probeMin": probeMin, "probeMax": probeMax}
 
 

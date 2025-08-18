@@ -12,11 +12,25 @@ from pathlib import Path
 from Bio.Blast import NCBIXML
 from pandas import DataFrame
 
-from ..RNASuiteUtil import ProgramObject, run_command_line
+from ..RNAProbesUtil import ProgramObject, run_command_line
 from ..util import (input_int_in_range, bounded_int, path_string, path_arg, remove_if_exists,
                       remove_files, validate_arg, validate_range_arg, parse_file_input, ValidationError, input_value,
                       input_path_string, input_path)
 from ..RNAUtil import CT_to_sscount_df, RNAStructureWrapper
+
+undscr = ("->" * 40) + "\n"
+copyright_msg = (("\n" * 6) +
+      f'PinMol Copyright (C) 2025 Avi Kohn, 2017  Irina E. Catrina\n' +
+      'This program comes with ABSOLUTELY NO WARRANTY;\n' +
+      'This is free software, and you are welcome to redistribute it\n' +
+      'under certain conditions; for details please read the LICENSE.txt file.\n\n' +
+     "Feel free to use the CLI or to run the program directly with command line arguments \n" +
+     "(view available arguments with --help).\n\n" +
+      undscr +
+      "\nWARNING: Previous files will be overwritten!  Save them in a \n" +
+      "different location than the current file, or rename them to \n"+
+      "ensure they are not misused (e.g. use probes from a different target).\n" +
+      undscr)
 
 probeMin = 18
 probeMax = 26
@@ -26,20 +40,6 @@ probesToSaveMax = 50
 exported_values = {"probeMin": probeMin, "probeMax": probeMax, "probesToSaveMin": probesToSaveMin, "probesToSaveMax": probesToSaveMax}
 
 svg_dir_name = "[fname]_svg_files"
-
-undscr = ("->" * 40) + "\n"
-copyright_msg = (("\n" * 6) +
-      f'PinMol Copyright (C) 2017  Irina E. Catrina\n' +
-      'This program comes with ABSOLUTELY NO WARRANTY;\n' +
-      'This is free software, and you are welcome to redistribute it\n' +
-      'under certain conditions; for details please read the GNU_GPL.txt file.\n\n' +
-     "Feel free to use the CLI or to run the program directly with command line arguments \n" +
-     "(view available arguments with --help).\n\n" +
-      undscr +
-      "\nWARNING: Previous files will be overwritten!  Save them in a \n" +
-      "different location than the current file, or rename them to \n"+
-      "ensure they are not misused (e.g. use probes from a different target).\n" +
-      undscr)
 
 match = ["ENERGY", "dG"]  # find header rows in ct file
 
@@ -91,7 +91,7 @@ def run(args: str | list="", from_command_line: bool = True):
     calculate_result(open(file_name, "r"), probe_length, file_name, arguments)
 
     if should_print(arguments):
-        print("\n" + "This information can be also be found in the file Final_molecular_beacons.csv" + "\n")
+        print("\n" + "This information can be also be found in the file Final_molecular_beacons.txt" + "\n")
         print(
             "\n" + "Check the structure for the selected probes using your favorite browser by opening the corresponding SVG files!")
         print("\n" + "If no SVG files are found, increase the number of probes and/or target region!")
@@ -104,7 +104,7 @@ def run(args: str | list="", from_command_line: bool = True):
 
 def write_result_string(program_object: ProgramObject, arguments: Namespace):
     result_str = get_result_string(program_object.result_obj)
-    with program_object.open_buffer(f"[fname]_Final_molecular_beacons.csv", "a") as add_output:
+    with program_object.open_buffer(f"[fname]_Final_molecular_beacons.txt", "a") as add_output:
         add_output.write(result_str)
     if should_print(arguments):
         print(result_str)
@@ -305,9 +305,9 @@ def calculate_beacons(mb_pick: DataFrame, probe_length: int, program_object: Pro
 
 def initialize_molecular_beacon_file(program_object):
     if program_object.get_arg("overwrite"):
-        program_object.reset_buffer(f"[fname]_Final_molecular_beacons.csv")
+        program_object.reset_buffer(f"[fname]_Final_molecular_beacons.txt")
 
-    with program_object.open_buffer(f"[fname]_Final_molecular_beacons.csv", "a") as file:
+    with program_object.open_buffer(f"[fname]_Final_molecular_beacons.txt", "a") as file:
         file.write('Beacons marked with a "*" are too structured or show a high degree of self-complementarity, and therefore have no svg file.\n')
 
 def design_beacon(mb_picks: DataFrame, index: int, probe_length: int, program_object: ProgramObject): #design the stem of the final probes
@@ -430,7 +430,7 @@ def save_beacon(index: int, mb_picks: DataFrame, beacon: str, program_object: Pr
 
     aseq = f"{'' if has_svg else '*'}{index + 1} MB sequence at base number {baseNum} is:  {beacon}"
     if should_print(program_object): print(aseq + '\n')
-    with program_object.open_buffer(f"[fname]_Final_molecular_beacons.csv", "a") as outputf:
+    with program_object.open_buffer(f"[fname]_Final_molecular_beacons.txt", "a") as outputf:
         outputf.write(aseq + '\n')
 
 argument_parser = None
