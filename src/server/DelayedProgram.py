@@ -5,12 +5,12 @@ from collections.abc import Callable
 from pathlib import Path
 from uuid import UUID
 
-from flask import Response, jsonify, render_template
-from Program import Program
+from flask import render_template
+from .Program import Program
 import json
 
-from src.rnaprobes.util import is_empty
-from src.rnaprobes.util import ValidationError
+from ..rnaprobes.util import is_empty
+from ..rnaprobes.util import ValidationError
 
 result_dir_name = "program-result"
 error_file = "error.json"
@@ -51,9 +51,9 @@ class DelayedProgram(Program):
         except BaseException as e:
             write_error_response(e, output_dir / error_file, **kwargs)
 
-    def _get_response(self, id: UUID, **kwargs) -> Response:
-        return jsonify(id=str(id), status="running", html=render_template(
-            'request-received.html', program=self.name, delayed=True, extra_notification = self.get_extra_notification(kwargs)))
+    def _get_response(self, _, job_id: UUID, **kwargs) -> dict:
+        return dict(id=str(job_id), status="running", html=render_template(
+            'request-results/request-received.html', program=self.name, delayed=True, extra_notification = self.get_extra_notification(kwargs)))
 
     def get_current_result(self, output_dir: Path, id: UUID):
         if not output_dir.exists():
@@ -61,9 +61,9 @@ class DelayedProgram(Program):
         if not (output_dir / result_dir_name).exists() or is_empty(output_dir / result_dir_name):
             return json.dumps(dict(status="running", id=str(id)))
 
-        return self.send_final_result(output_dir)
+        return self.send_final_result(output_dir, id)
 
-    def send_final_result(self, output_dir):
+    def send_final_result(self, output_dir: Path, id: UUID):
         result_dir = output_dir / result_dir_name
         try:
             if (result_dir / error_file).exists():
@@ -71,7 +71,7 @@ class DelayedProgram(Program):
             else:
                 path = next(result_dir.iterdir())
                 with open(path, "rb") as file:
-                    return self._get_response_from_zip(file.read(), path.name)
+                    return self._get_response_from_zip(id, file.read(), path.name)
         finally:
             super()._remove_directory(output_dir)
 

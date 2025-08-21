@@ -54,6 +54,9 @@
 
           <fieldset id="smFISH-section" class="program-section mb-4 {{ '' if 'smFISH' in programs else 'd-none' }}" program="smFISH" {{"" if 'smFISH' in programs else 'disabled' }}>
             <h3 class="fs-4"><i class="fas fa-search-plus me-2"></i>smFISH Options</h3>
+            {% if is_web_app %} 
+              <p class="form-text">Input file limitations: RNA Length must be less than {{exports.smFISH.maxWebappLength}} nucleotides</p>
+            {% endif %}
             <div class="program-card program-card-inline">
               <div class="inline-card-body">
                 <div>

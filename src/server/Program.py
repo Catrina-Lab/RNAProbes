@@ -7,9 +7,9 @@ from uuid import UUID
 
 from flask import Response, jsonify, render_template
 
-from src.rnaprobes.RNAProbesUtil import ProgramObject
-from src.rnaprobes.util import safe_remove_tree
-from src.rnaprobes.util import ValidationError
+from ..rnaprobes.RNAProbesUtil import ProgramObject
+from ..rnaprobes.util import safe_remove_tree
+from ..rnaprobes.util import ValidationError
 import traceback
 
 def send_error_response(error: BaseException, **kwargs):
@@ -42,14 +42,14 @@ class Program:
         except Exception as e:
             raise Exception(f"{error_message}: {str(e)}") from e
 
-    def _get_response(self, result: ProgramObject, **kwargs) -> Response:
+    def _get_response(self, result: ProgramObject, job_id, **kwargs) -> dict:
         zip_bytes, zipfile_name = self._result_bytes(result, **kwargs)
-        return self._get_response_from_zip(zip_bytes, zipfile_name)
+        return self._get_response_from_zip(job_id, zip_bytes, zipfile_name)
 
     def _remove_directory(self, output_dir):
         safe_remove_tree(output_dir, self.root_dir)
 
-    def run(self, request, validate_err_msg: str, runtime_err_msg: str) -> Response | tuple[str, int]:
+    def run(self, request, validate_err_msg: str, runtime_err_msg: str) -> dict | tuple[str, int]:
         kwargs = dict()
         output_dir = None
         try:
@@ -57,7 +57,7 @@ class Program:
             kwargs = self._get_args(request, output_dir)
             kwargs = kwargs | self._validate_args(kwargs, validate_err_msg) #join the result with kwargs
             result = self._run_program(kwargs, job_id, runtime_err_msg, validate_err_msg=validate_err_msg)
-            return self._get_response(result, **kwargs)
+            return self._get_response(result, job_id, **kwargs)
         except BaseException as e:
             return send_error_response(e, **kwargs)
         finally:
@@ -92,7 +92,7 @@ class Program:
     def _get_response_bytes(self, result: ProgramObject, **kwargs) -> tuple[bytes, str]:
         return result.to_zip(f"{self.name}ResultsFor-[fname].zip")
 
-    def _get_response_from_zip(self, zip_bytes: bytes, zipfile_name: str):
+    def _get_response_from_zip(self, job_id: UUID, zip_bytes: bytes, zipfile_name: str):
         zip_file_encoded = base64.b64encode(zip_bytes).decode("utf-8")
-        return jsonify(zip=zip_file_encoded, status="complete", html=render_template(
-            'request-completed.html', program=self.name, filename=zipfile_name))
+        return dict(zip=zip_file_encoded, status="complete", html=render_template(
+            'request-results/request-completed.html', program=self.name, filename=zipfile_name, id=str(job_id)))

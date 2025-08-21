@@ -12,9 +12,11 @@
     line-height: 22px;
     width: 30px;
     color: #4567e8;
-    cursor: pointer;
 }
 
+.pagArrow {
+    cursor: pointer;
+}
 .pagItem:last-child {
     border-radius: 0 3px 3px 0;
     /* width: 10px; */

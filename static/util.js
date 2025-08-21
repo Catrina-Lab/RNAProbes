@@ -31,6 +31,14 @@ function createElem(type, theClass, parent, extraFuncs = e=> e){
 	return elem;
 }
 
+function createElemNS(namespaceURI, type, theClass, parent, extraFuncs = e=> e, options){
+	let elem = document.createElementNS(namespaceURI, type, options);
+	elem.className = theClass;
+	extraFuncs(elem);
+	parent.appendChild(elem);
+	return elem;
+}
+
 function wrapIndex(arr, i){
     return arr[((i % arr.length) + arr.length) % arr.length];
 }
@@ -38,6 +46,12 @@ function getWrapIndex(arr, i){
     return ((i % arr.length) + arr.length) % arr.length;
 }
 
+function toFixed(val, places){
+	return Math.round((val + Number.EPSILON) * Math.pow(10, places)) / Math.pow(10, places);
+}
+function escapeRegExp(string) {
+    return string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'); // $& means the whole matched string
+}
 //#region //Validation (assertion) methods
 class ValidationError extends Error {
         constructor(message) {
@@ -177,3 +191,20 @@ function isInBound(min, max, ...values){
 }
 
 //#endregion
+
+
+function readFileAsync(file, fr){
+  return new Promise((resolve, reject) => {
+    fr.onload = () => {
+      resolve(fr.result )
+    };
+    fr.onerror = reject;
+    fr.readAsText(file);
+  });
+}
+async function getLastChars(file, size=512){
+    const reader = new FileReader();
+    const section = file.slice(file.size - size, file.size);
+    return await readFileAsync(section, reader);
+}
+
