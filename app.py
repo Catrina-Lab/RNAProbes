@@ -9,11 +9,10 @@ from pathlib import Path
 from flask import Flask, render_template, request, redirect, url_for, Response, make_response, g, jsonify
 from sys import argv
 
-from src.server.DelayedProgram import DelayedProgram
 from src.rnaprobes.TFOFinder import tfofinder
 from src.rnaprobes.PinMol import pinmol
 from src.rnaprobes.smFISH import smFISH
-from src.server.program_controller import get_program_object, run_program, set_root
+from src.server.program_controller import run_program, set_root, query_program
 from werkzeug.utils import secure_filename
 
 app = Flask(__name__)
@@ -70,12 +69,7 @@ def send_request():
 def query_result():
     program_name = secure_filename(request.args.get("program")) #prevents injection attacks
     id = uuid.UUID(request.args.get("id")) #prevents injection attacks
-    program = get_program_object(program_name)
-    output_dir = program.output_dir / str(id)
-    if isinstance(program, DelayedProgram):
-        return program.get_current_result(output_dir, id)
-    else:
-        return f"Can only query a DelayedProgram. {program_name} is not a DelayedProgram", 400
+    return query_program(program_name, id)
 
 @app.route('/legal')
 def legal():
@@ -90,4 +84,4 @@ def contact():
     return render_template('contact.html')
 
 if __name__ == '__main__':
-    app.run(debug= (True if "-d" in argv or "--debug" in argv else False)) #use debug if any commmand line arguments are inputted
+    app.run(debug= (True if "-d" in argv or "--debug" in argv else False)) #use debug if any command line arguments are inputted
