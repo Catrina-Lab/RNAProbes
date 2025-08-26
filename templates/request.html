@@ -2,6 +2,47 @@
 
 {% block titleAddition %} - requests{% endblock %}
 
+{% block head_content %}
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "WebPage",
+  "name": "RNAProbes: Probe Designer",
+  "url": "https://www.rnaprobes.org/design",
+  "description": "Design probes for a given RNA",
+  "breadcrumb": {
+    "@type": "BreadcrumbList",
+    "itemListElement": [
+      {
+        "@type": "ListItem",
+        "position": 1,
+        "name": "RNAProbes",
+        "item": "https://www.rnaprobes.org/"
+      },
+      {
+        "@type": "ListItem",
+        "position": 2,
+        "name": "RNAProbes: Probe Designer",
+        "item": "https://www.rnaprobes.org/design"
+      }
+    ]
+  }
+}
+</script>
+<link rel="stylesheet" href="{{ url_for('static', filename='pagination.css') }}">
+<style>
+  .program-section {
+    background-color: #f8f9fa;
+    padding: 1.5rem;
+    border-radius: 10px;
+    border: 1px solid #dee2e6;
+  }
+  .text-header{
+    margin-top: 2rem;
+  }
+</style>
+{% endblock %}
+
 {% block content %}
 <div id="form-container">
   {% include 'request-form.html' %}
@@ -15,8 +56,8 @@
     <div class="col-lg-8">
       {% for program in all_programs %}
         <div id="{{program}}-response-container" class="program-response-container d-none">
-          {% include 'request-failed.html' %}
-          {% include 'request-received.html' %}
+          {% include 'request-results/request-failed.html' %}
+          {% include 'request-results/request-received.html' %}
         </div>
       {% endfor %}
     </div>
@@ -26,12 +67,51 @@
 
 {% block scripts %}
 <script src="{{ url_for('static', filename='program-card.js') }}"></script>
+<script src="{{ url_for('static', filename='disableCollapsed.js') }}"></script>
 <script src="{{ url_for('static', filename='util.js') }}"></script>
+<script src="{{ url_for('static', filename='zip.min.js') }}" type="application/javascript"></script>
+
 <script>
   const programs = {{ all_programs | tojson }};
   const initialSelectedPrograms = {{programs | tojson}};
 </script>
 <script>
+  const outputSorter = {
+    "pinmol": {
+      "sorter": ["_Final_molecular_beacons.txt", ".svg", "_best_probes.csv", "_blast_picks.fasta", "_all_probes_sortedby5.csv", "_GC_bounded_probes.csv", "_sscount.csv", "_blast_result.xml"],
+      ".svg": (a,b)=>{
+        return parseInt(/[0-9]+$/.exec(a)[0]) - parseInt(/[0-9]+$/.exec(b)[0]);
+      }
+    },
+    "smfish": {
+      "sorter": ["_best_[0-9]+_probes.csv", "_combined_output.csv", "_best_probes_set.csv", "_possible_matching_probes.csv"]
+    },
+    "tfofinder": {
+      "sorter": [".txt", ".csv"]
+    }
+  }
+  function getSortValue(arr, value){
+    let val = arr.findIndex(e=>e.test(value));
+    return val === -1 ? arr.length : val;
+  }
+  function getFileSorter(program){
+    const sorterObj = outputSorter[program.toLowerCase()];
+    const testArr = sorterObj.sorter.map(e=>new RegExp(e.replaceAll(".", "[.]") + "$"));
+
+    function secondarySort(a,b,index){
+      const sorter = sorterObj[sorterObj.sorter[index]]; //will also be undefined if index is out of bounds
+      if(sorter === undefined) return 0;
+      const aPart = a.replace(testArr[index], "");
+      const bPart = b.replace(testArr[index], "");
+      return sorter(aPart, bPart);
+    }
+
+    return function(a,b){
+      let aIndex = getSortValue(testArr, a);
+      let bindex = getSortValue(testArr, b);
+      return aIndex - bindex || secondarySort(a,b, aIndex);
+    }
+  }
   const STATUS = createBasicEnum("STATUS", "RECIEVED", "DELAYED_RECIEVED", "COMPLETE", "FAILED");
   class ProgramQueryHandler{
     static selectedPrograms = Object.fromEntries(initialSelectedPrograms.map(e=>[e,true]));
@@ -51,31 +131,34 @@
     }
     static indexAttribute = "index";
     queries = [];
-    currentQueryIndex = 0;
-    constructor(program){
+    constructor(program, fileSorter= undefined, fileNamePredicate = e=>true){
       this.program = program;  
+      this.fileNamePredicate = fileNamePredicate;
+      this.fileSorter = fileSorter;
       this.renderer = new QueryRenderer(program);
+      this.paginationController = new PaginationController(this.renderer, this.queries);
+      this.fileSorter = fileSorter ?? getFileSorter(program);
     }
     addResult(){
       const query = new Query(this.program, this.queries.length, this);
       this.queries.push(query);
-      this.currentQueryIndex = this.queries.length - 1;
       this.render(query, true);
       return query;
     }
     render(query, forceShow = false){
-      this.renderer.render(query, undefined, forceShow);
+      this.paginationController.render(query, forceShow);
     }
-    show(index, relative = false){
-      if(relative) index = this.currentQueryIndex + index;
-      this.currentQueryIndex = getWrapIndex(this.queries, index);
-      this.renderer.render(this.queries[this.currentQueryIndex], true);
+    show(index, relative){
+      this.paginationController.show(index, relative);
     }
     downloadFile(target){
       const container = target.closest(".single-query-container");
       const index = parseInt(container.getAttribute(ProgramQueryHandler.indexAttribute));
       const query = this.queries[index];
       query.downloadFile(container);
+    }
+    sortFiles(files){
+      return files.filter(e=>this.fileNamePredicate(e.filename)).sort((a,b)=>this.fileSorter(a.filename, b.filename));
     }
     select(){
       const section = document.querySelector(`.program-section[program="${this.program}"]`);
@@ -94,15 +177,18 @@
       delete ProgramQueryHandler.selectedPrograms[this.program];
     }
   }
-
   class Query{
     value = "";
     url = "";
-    constructor(program, index, parent){
+    files = undefined;
+    filesToShow;
+    fileRenderer;
+    filePaginationController;
+    constructor(program, index, parentHandler){
       this.program = program;
       this.index = index;
       this.status = STATUS.RECIEVED;
-      this.parent = parent;
+      this.parentHandler = parentHandler;
     }
     downloadFile(container) {
       const anchor = container.querySelector(`.download-anchor`);
@@ -118,83 +204,89 @@
     render(value, queryStatus = STATUS.COMPLETE){
       this.value = value;
       this.status = queryStatus;
-      this.parent.render(this);
+      this.parentHandler.render(this);
+    }
+    getResultContainer(){
+      return this.parentHandler.renderer.getSingleQueryContainer(this);
+    }
+    saveFileEntries(entries){
+      const filesToShow = this.parentHandler.sortFiles(entries);
+      this.fileObjects = filesToShow.map((e,i)=>getFileObject(e, i));
+      this.fileRenderer = new FileRenderer(this);
+      this.filePaginationController = new PaginationController(this.fileRenderer, this.fileObjects);
+      this.fileRenderer.renderAll(this.fileObjects, true);
     }
     async startResponse(response){
-      return new QueryResponse(this, this.program).handleResponse(response);
+      return new QueryResponse(this, this.parentHandler).handleResponse(response);
+    }
+    async fetchError(){
+      return new QueryResponse(this, this.parentHandler).renderError("Can't connect to server.");
     }
   }
 
-  class QueryRenderer{
-    static getQueryContainerID(query){
-      return `${query.program}-result-container-${query.index}`;
-    }
+  class PaginationController{
+    currentShownIndex = 0;
+    values = []
 
-    currentRenderedQuery = null;
-    program = "";
-    constructor(program){
-      this.program = program;  
-      this.programResponseContainer = document.getElementById(`${program}-response-container`);
-      this.recievedContainer = this.programResponseContainer.querySelector(".request-recieved");
-      this.failedContainer = this.programResponseContainer.querySelector(".request-failed");    
+    //values should only ever be added to, not removed from OR inserted
+    constructor(renderer, values, addIndexProperty = false){
+      this.values = values;
+      this.renderer = renderer;
     }
-    render(query, showOnly = false, forceShow = true){ //forceShow allows for background modification
-      forceShow = forceShow || query == this.currentRenderedQuery || this.currentRenderedQuery === null;
-      let container = this.setContainerValue(query, showOnly, forceShow);
+    pagButtonClick(button){
+      parent = button.parentNode;
+      this.show(parseInt(button.getAttribute("value")), e.target.getAttribute("relative") === "true");
+    }
+    show(index, relative = false){
+      if(relative) index = this.currentShownIndex + index;
+      this.currentShownIndex = getWrapIndex(this.values, index);
+      if(this.addIndexProperty) this.values[this.currentShownIndex].index = this.currentShownIndex;
+      this.renderer.render(this.values[this.currentShownIndex], true, false);
+    }
+    render(value, forceShow = false){
+      const index = this.values.indexOf(value);
+      if(index == -1){
+        throw new Error("Can't render value not in array");
+      }
+      this.currentShownIndex = index;
+      if(this.addIndexProperty) this.values[this.currentShownIndex].index = this.currentShownIndex;
+      this.renderer.render(value, forceShow);
+    }
+  }
+
+  class PageRenderer{
+    currentRenderedValue = null;
+    currentRenderedContainer;
+    valuesContainer;
+    constructor(container, getContainerFromValue, getPagNumberFromValue, pagNumContainerGetter){
+      this.valuesContainer = container;
+      this.getContainerFromValue = getContainerFromValue ?? this.getContainerFromValue;
+      this.getPagNumberFromValue = getPagNumberFromValue ?? this.getPagNumberFromValue;
+      this.pagNumContainerGetter = pagNumContainerGetter ?? this.pagNumContainerGetter;
+    }
+    render(value, forceShow = true, rerender = true){ //forceShow allows for background modification
+      forceShow = forceShow || value == this.currentRenderedValue || this.currentRenderedValue === null;
+      let container = this._getContainerFromValue(value, forceShow, rerender);
       if(forceShow) {
         this.clearCurrent();
         this.currentRenderedContainer = container;
+        this.renderPaginationNumber(container, value);
         this.currentRenderedContainer.classList.remove("d-none");
-        this.currentRenderedQuery = query;
+        this.currentRenderedValue = value;
       }
-      this.programResponseContainer.classList.remove("d-none");
+      this.valuesContainer.classList.remove("d-none");
     }
-    setContainerValue(query, showOnly, forceShow){
-      if(query.status == STATUS.RECIEVED ){
-        return this.tryShowRecieved(query, forceShow);
-      } else if(query.status == STATUS.FAILED){
-        return this.tryShowFailed(query, forceShow);
-      } else {
-        return this.renderQuery(query, showOnly); //should be in bg unless don't need
-      }
+    renderPaginationNumber(container, value){
+      this.pagNumContainerGetter(container).querySelector(".pagNum").textContent = this.getPagNumberFromValue(value);
     }
-    renderPaginationNumber(query, container){
-      container.querySelector(".pagNum").textContent = query.index + 1;
+    getPagNumberFromValue(value){
+      return value.index + 1; //if indexing is on on the pagination controller, will have an index attr
     }
-    tryShowRecieved(query, forceShow){
-      if(forceShow) this.renderPaginationNumber(query, this.recievedContainer);
-      return this.recievedContainer;
-    }
-    tryShowFailed(query, forceShow){
-      if(forceShow){
-        this.renderPaginationNumber(query, this.failedContainer);
-        this.failedContainer.querySelector(".failed-message").textContent = query.value;
-      }
-      return this.failedContainer;
-    }
-    renderQuery(query, showOnly = false){
-      const container = this.getOrCreateQueryContainer(query);
-      if(!showOnly) container.innerHTML = this.parseQueryText(query);
+    pagNumContainerGetter(container){
       return container;
     }
-    parseQueryText(query){
-      const elem = document.createElement("template");
-      elem.innerHTML = query.value;
-      this.renderPaginationNumber(query, elem.content);
-      return elem.innerHTML;
-    }
-    getOrCreateQueryContainer(query){
-      const container = this.getSingleQueryContainer(query);
-      return container || this.createQueryContainer(query);
-    }
-    createQueryContainer(query){
-      return createElem("div", "single-query-container d-none", this.programResponseContainer, elem=>{
-        elem.id = QueryRenderer.getQueryContainerID(query);
-        elem.setAttribute(ProgramQueryHandler.indexAttribute, query.index);
-      });
-    }
-    getSingleQueryContainer(query){
-      return this.programResponseContainer.querySelector("#" + QueryRenderer.getQueryContainerID(query));
+    _getContainerFromValue(value, forceShow, rerender){
+      return this.getContainerFromValue(value, forceShow, rerender);
     }
     clearCurrent(){
       if(this.currentRenderedContainer){
@@ -202,7 +294,333 @@
       }
     }
   }
+  class QueryRenderer extends PageRenderer{
+    static getQueryContainerID(query){
+      return `${query.program}-result-container-${query.index}`;
+    }
 
+    program = "";
+    constructor(program){
+      super(document.getElementById(`${program}-response-container`))
+      this.program = program;  
+      this.recievedContainer = this.valuesContainer.querySelector(".request-recieved");
+      this.failedContainer = this.valuesContainer.querySelector(".request-failed");    
+    }
+    getContainerFromValue(query, forceShow, rerender){
+      if(query.status == STATUS.RECIEVED ){
+        return this.tryShowRecieved(query, forceShow);
+      } else if(query.status == STATUS.FAILED){
+        return this.tryShowFailed(query, forceShow);
+      } else {
+        return this.renderQuery(query, rerender); //should be in bg unless don't need
+      }
+    }
+    tryShowRecieved(query, forceShow){
+      return this.recievedContainer;
+    }
+    tryShowFailed(query, forceShow){
+      if(forceShow){
+        this.failedContainer.querySelector(".failed-message").textContent = query.value;
+      }
+      return this.failedContainer;
+    }
+    renderQuery(query, rerender = true){
+      const container = this.getOrCreateQueryContainer(query);
+      if(rerender) container.replaceChildren(this.parseQueryText(query));
+      return container;
+    }
+    parseQueryText(query){
+      const elem = document.createElement("template");
+      elem.innerHTML = query.value;
+      this.renderPaginationNumber(elem.content, query); //don't think this is needed btw
+      if(elem.content.querySelector('.modal-body')) FileRenderer.registerModal(query, elem.content.querySelector('.modal-body'));
+      return elem.content;
+    }
+    getOrCreateQueryContainer(query){
+      const container = this.getSingleQueryContainer(query);
+      return container || this.createQueryContainer(query);
+    }
+    createQueryContainer(query){
+      return createElem("div", "single-query-container d-none", this.valuesContainer, elem=>{
+        elem.id = QueryRenderer.getQueryContainerID(query);
+        elem.setAttribute(ProgramQueryHandler.indexAttribute, query.index);
+      });
+    }
+    getSingleQueryContainer(query){
+      return this.valuesContainer.querySelector("#" + QueryRenderer.getQueryContainerID(query));
+    }
+  }
+  /*
+    body:
+      pagination
+      <resC>
+      <resC>
+      <resC...>
+
+  */
+
+  class File{
+    filename;
+    name;
+    ext;
+    blob;
+    content;
+    constructor(index, blob){
+      this.index = index;
+      this.blob = blob;
+      this.name = getFilename(blob.filename);
+      this.ext = getExt(blob.filename);
+      this.filename = blob.filename;
+    }
+    async renderInitial(container){
+      const text = await this.blob.getData(new zip.TextWriter());
+      this.content = this.getContent(text);
+      this.renderFile(container, this.content);
+    }
+    getContent(text){
+      return text;
+    }
+    onScroll(e){
+
+    }
+    renderFile(container, text){ //by default, treat as text
+      container.innerHTML = text;
+    }
+    derender(container){
+      //do nothing
+    }
+  }
+  class TXTFile extends File{
+    getContent(text){
+      return text.split("\n");
+    }
+    renderFile(container, lines){ //by default, treat as text
+      for(let line of lines){
+        if(line !== "") {
+          const row = createElem("p", "text-line", container, e=>{
+            e.textContent = line;
+          });
+        }
+      }
+    }
+  }
+  const scaleRegex = /scale\(([^)]*?)\)/;
+  function getScaleFromTransform(text){
+    return parseFloat(scaleRegex.exec(text)[1]);
+  }
+  class SVGFile extends File{
+    renderFile(container, text){
+      const elem = document.createElement("template");
+      elem.innerHTML = text;
+      const svgElement = elem.content.firstElementChild;
+      svgElement.classList.add("rendered-svg");
+      const svgText = this.modifySVG(svgElement);
+      container.appendChild(svgElement);
+      createElem("div", "svg-text", container, e=>{
+        e.textContent = svgText;
+      });
+      //const elem = createElemNS("http://www.w3.org/2000/svg", "svg", "rendered-svg", container, e=>{
+      //  e.innerHTML = text;
+      //});
+      return elem.innerHTML;
+    }
+    modifySVG(svgElement){
+      [...svgElement.children].forEach(e=>e.removeAttribute("font-size"));
+      this.modifySVGHeight(svgElement);
+      return this.removeSVGText(svgElement);
+    }
+    modifySVGHeight(svgElement){
+      const values = svgElement.firstElementChild.firstElementChild.getAttribute("d"); //should be the bottommost value
+      const scale = getScaleFromTransform(svgElement.firstElementChild.getAttribute("transform"))
+      const height = parseInt(values.split(",")[1]);
+      let viewBox = svgElement.getAttribute('viewBox').split(' ');
+      viewBox[3] = (height*scale) + 48; //give it a bit of an offset
+      svgElement.setAttribute('viewBox', viewBox.join(" "));
+    }
+    removeSVGText(svgElement){
+      const lastElem = svgElement.lastElementChild;
+      svgElement.removeChild(lastElem);
+      return lastElem.textContent;
+    }
+  }
+  class ScrollableFile extends File {
+    static percentScrolledToRender = .75;
+    static rowIncreaseFactor = 1.5;
+    static defaultRowsToRender = 100;
+    lastRenderedRow = -1;
+    rowsToRender = 100;
+    currentRowsToRender = 100;
+    constructor(index, blob, rowsToRender = ScrollableFile.defaultRowsToRender){
+      super(index, blob)
+      this.rowsToRender = rowsToRender;
+    }
+    //to implement:
+    getContent(text){
+      return text.split("\n");
+    }
+    createLinesContainer(container){
+      return createElem("div", "lines-container", container);
+    }
+    renderLine(line, index){
+      //impl
+    }
+    //end
+    onScroll(e){
+      const elem = e.target;
+      const scrollableHeight = elem.scrollHeight - elem.clientHeight;
+      if(elem.scrollTop / scrollableHeight > CSVFile.percentScrolledToRender){
+        if(this.lastRenderedRow < this.content.length - 1) this.addLines(this.content);
+      }
+    }
+    //render block
+    renderFile(container, lines){
+      this.rowContainer = this.createLinesContainer(container);
+      this.addLines(lines);
+    }
+
+    addLines(lines){
+      let nextRow = this.lastRenderedRow + 1;
+      for(let i = nextRow; i < lines.length && i < nextRow + this.currentRowsToRender; i++){
+        this.renderLine(this.rowContainer, lines[i], i);
+        this.lastRenderedRow = i;
+      }
+      this.currentRowsToRender *= ScrollableFile.rowIncreaseFactor;
+    }
+    derender(){
+      super.derender();
+      const container = this.rowContainer.parentNode;
+      container.removeChild(this.rowContainer);
+      this.lastRenderedRow = -1;
+      this.currentRowsToRender = this.rowsToRender;
+      this.renderFile(container, this.content);
+    }
+  }
+
+  class CSVFile extends ScrollableFile{
+    constructor(index, blob, hasHeader = true){
+      super(index, blob);
+      this.header = hasHeader;
+    }
+    getContent(text){
+      return text.split("\n").map(e=>e.trim().split(",")).filter(e=>e.length > 1 || e[0] !== "");
+    }
+    //render block
+    createLinesContainer(container){
+      return createElem("table", "csv-table", container);
+    }
+    renderLine(container, lineArr, index){
+      const isHeader = index == 0 && this.hasHeader;
+      const row = createElem("tr", "csv-row" + (isHeader ? " csv-header" : ""), container);
+      for(let item of lineArr){
+        createElem(isHeader ? "th" : "td", "csv-item", row, e=>{
+          e.textContent = FileRenderer.toString(item);
+        });
+      }
+    }
+  }
+
+  class ScrollableTXT extends ScrollableFile {
+    constructor(index, blob){
+      super(index, blob, 300);
+    }
+    renderLine(container, line, index){ //by default, treat as text
+      const row = createElem("p", "text-line", container, e=>{
+        e.textContent = line;
+      });
+    }
+  }
+
+  const filesByExtension = {
+    "csv": CSVFile,
+    "svg": SVGFile,
+    "txt": TXTFile,
+    "fasta": TXTFile,
+    "xml": ScrollableTXT
+  }
+  function getExt(filename){
+    return extRe.exec(filename)[1];
+  }
+  function getFileObject(file, index, ...extra){
+    const extension = getExt(file.filename);
+    const ContentFileType = filesByExtension[extension.toLowerCase()];
+    if(ContentFileType !== undefined){
+      return new ContentFileType(index, file, ...extra);
+    } else {
+      console.error(`Render not found for extension ${extension}. Defaulting to text`);
+      return new TXTFile(index, file, ...extra);
+    }
+  }
+
+  const extRe = /(?:\.([^.]+))?$/;
+  const filenameRe = /^[^.]*/;
+  function getFilename(filename){
+    return filenameRe.exec(filename)[0];
+  }
+  function formatFileName(fileName){
+    return fileName.replaceAll(".", "_").replace(/[^\w0-9\-]/g, "-");
+  }
+  class FileRenderer extends PageRenderer{
+    static precision = 10;
+    static toString(val){
+      if(val != '' && !isNaN(val)) return toFixed(parseFloat(val), 10).toString(); 
+      return val;
+    }
+    static getFileContainerID(file, query){
+      return `${query.program}-${query.index}-file-container-${formatFileName(file.filename)}`;
+    }
+    static registerModal(query, modal){
+      modal.addEventListener('scroll', e=>{
+        query.fileRenderer.currentRenderedValue?.onScroll(e);
+      })
+    }
+    renderFilename(container, filename){
+      const elem = createElem("h5", "filename-header", container, e=>{
+        e.textContent = filename;
+      });
+    }
+    constructor(query){
+      super(query.getResultContainer().querySelector(".modal-body"));
+      this.query = query;
+    }
+    getContainerFromValue(query, rerender = false){
+      return this.getOrCreateFileContainer(query); //rerender is not supported here
+    }
+    pagNumContainerGetter(){
+      return this.valuesContainer;
+    }
+    getOrCreateFileContainer(file){
+      const container = this.getSingleFileContainer(file);
+      return container || this.createFileContainer(file);
+    }
+    createFileContainer(file){
+      return createElem("div", "single-file-container d-none", this.valuesContainer, elem=>{
+        elem.id = FileRenderer.getFileContainerID(file, this.query);
+        elem.setAttribute(ProgramQueryHandler.indexAttribute, file.index); //PaginationController will add an index to the file object
+      });
+    }
+    getSingleFileContainer(file){
+      return this.valuesContainer.querySelector("#" + FileRenderer.getFileContainerID(file, this.query));
+    }
+    async renderAll(files){
+      for(let i = 0; i < files.length; i++){
+        files[i].index = i;
+        const container = this.getOrCreateFileContainer(files[i]);
+        this.renderFilename(container, files[i].filename);
+        files[i].renderInitial(container);
+      }
+      this.render(files[0], true, false);
+    }
+    async renderFile(file, container){
+      const text = await file.getData(new zip.TextWriter());
+      FileRenderer.renderFile(container, file.filename, text);
+    }
+    clearCurrent(){
+      super.clearCurrent();
+      if(this.currentRenderedValue){
+        this.currentRenderedValue.derender();
+      }
+    }
+  }
   function base64ToUint8Array(encoded) {
     const binary = atob(encoded);
     const bytes = new Uint8Array(binary.length);
@@ -215,16 +633,19 @@
     return new Promise(resolve => setTimeout(resolve, ms));
   }
   class QueryResponse{
-    constructor(query, program, response){
+    constructor(query, parentHandler){
       this.query = query;
-      this.program = program;
+      this.parentHandler = parentHandler;
     }
     render(html, status = STATUS.COMPLETE){
       this.query.render(html, status);
     }
+    renderError(text){
+      this.render(text, STATUS.FAILED);
+    }
     async handleResponse(response){
       if(response.status >= 400  && response.status < 600){
-        this.render(await response.text(), STATUS.FAILED)
+        this.renderError(await response.text());
       } else {
         const responseJson = await response.json();
         this.renderResponseJSON(responseJson);
@@ -236,12 +657,17 @@
       else this.renderResponse(json);
     }
     renderResponse(json) {
-      this.saveURL(json.zip);
       this.render(json.html);
+      this.saveZip(json.zip);
     }
-    saveURL(zip) {
-      const zipFile = new Blob([base64ToUint8Array(zip)], { type: 'application/zip' });
+    saveZip(zipBytes) {
+      const zipFile = new Blob([base64ToUint8Array(zipBytes)], { type: 'application/zip' });
       this.query.url = URL.createObjectURL(zipFile);
+      const zipReader = new zip.ZipReader(new zip.BlobReader(zipFile));
+      zipReader.getEntries().then(e=>{
+        this.query.saveFileEntries(e);
+        zipReader.close();
+      });
     }
     async renderDelayedResponse(json){
       if(this.query.status != STATUS.DELAYED_RECIEVED) {
@@ -256,7 +682,7 @@
     }
 
     async sendQuery(id){
-      return await fetch(`/query-result?program=${this.program}&id=${id}`)
+      return await fetch(`/query-result?program=${this.parentHandler.program}&id=${id}`)
     }
   }
 </script>
@@ -269,27 +695,57 @@
 
   const defaultEndBaseMin = {{1 + exports.PinMol.probeMin}};
   const resultUrls = {};
-  const smFISHMaxSize = {{exports.smFISH.maxWebappSize}};
+  const smFISHMaxLength = {{exports.smFISH.maxWebappLength}};
   const TFOFinderBounds = new Bound({{exports.TFOFinder.probeMin}}, {{exports.TFOFinder.probeMax+1}});
   const queryHandlers = ProgramQueryHandler.getQueryHandlers(programs);
 
   function programSelected(program){
     return ProgramQueryHandler.isProgramSelected(programsCased[program.toLowerCase()]);
   }
-  form.addEventListener("submit", e => {
-    e.preventDefault();
-    if(formIsValid(form)){
-      const programs = ProgramQueryHandler.getSelectedPrograms();
-      sendRequests(programs);
-      swapView(false, programs);
-    }
-  });
-
   form.addEventListener("input", e=> {
     if(e.target.setCustomValidity){
       e.target.setCustomValidity(''); //crazy that this is needed
     }
   });
+  form.addEventListener("submit", e => {
+    e.preventDefault();
+    trySubmitForm(form);
+  });
+  async function trySubmitForm(form){
+    if(await formIsValid(form)){
+      const programs = ProgramQueryHandler.getSelectedPrograms();
+      sendRequests(programs);
+      swapView(false, programs);
+    }
+  }
+
+  async function formIsValid(form){
+    const ctFileInput = form.querySelector("#ct-file");
+    const tfofinderProbeLength = form.querySelector("#tfofinder-probe-length");
+    if(programSelected("smfish")){
+      let nucLength = await getNucleotideLength(ctFileInput.files[0]);
+      if(nucLength >= smFISHMaxLength){
+        return invalidateForm(ctFileInput, `Your RNA is too long! It must be below ${smFISHMaxLength} nucleotides if using smFISH. Your RNA is ${nucLength} nucleotides long. Please choose a smaller file, deselect smFISH, or run smFISH on your own system (view the github repository down below)`);
+      }
+    }
+    if(programSelected("tfofinder")){
+      let rangeOrError = DiscontinuousRange.isInvalidString(tfofinderProbeLength.value, TFOFinderBounds.start, TFOFinderBounds.stop, true)
+      if(rangeOrError){
+        return invalidateForm(tfofinderProbeLength, `Probe length(s) invalid. Error: ` + rangeOrError);
+      }
+    }
+    return true;
+  }
+
+  async function getNucleotideLength(file){
+    let section = await getLastChars(file);
+    const lastLine = section.split("\n").reverse().find(e=>{ //get the last CT line
+      let first = e.trim().split(/\s+/g)[0];
+      return first !== "" && !isNaN(first);
+    });
+    return parseInt(lastLine.trim()) //js will stop by the first space, so don't need to split
+  }
+
   function swapView(toForm = true, programs = []){
     if(toForm){
       formContainer.classList.remove("d-none");
@@ -300,33 +756,20 @@
       programs.forEach(e=>queryHandlers.get(e).deselect());
     }
   }
+  function invalidateForm(element, message){
+    setScroll();
+    element.setCustomValidity(message);
+    element.reportValidity();
+    return false;
+  }
   function setScroll(){
     document.documentElement.style.setProperty("scroll-behavior", "auto", "important")
     setTimeout(()=>{
       document.documentElement.style.removeProperty("scroll-behavior");
     }, 50);
   }
-  function invalidateForm(element, message){
-    setScroll();
-    element.setCustomValidity(message);
-    element.reportValidity();
-  }
-  function formIsValid(form){
-    console.log("test");
-    const ctFileInput = form.querySelector("#ct-file");
-    const tfofinderProbeLength = form.querySelector("#tfofinder-probe-length");
-    let value;
-    if(programSelected("smfish") && ctFileInput.files[0].size > smFISHMaxSize){
-      invalidateForm(ctFileInput, `CT file too large! It must be below ${smFISHMaxSize / 1000 / 1000} MB if using smFISH. Please choose a smaller file, deselect smFISH, or run smFISH on your own system (view the github repository down below)`);
-    } else if(programSelected("tfofinder") && 
-      (value = DiscontinuousRange.isInvalidString(tfofinderProbeLength.value, TFOFinderBounds.start, TFOFinderBounds.stop, true))){
-        console.log(tfofinderProbeLength.value);
-        invalidateForm(tfofinderProbeLength, `Probe length(s) invalid. Error: ` + value);
-    } else {
-      return true;
-    }
-    return false;
-  }
+
+
   const endBaseInput = form.querySelector("#pinmol-end-base");
   const endBaseText = form.querySelector("#pinmol-end-base-text");
   const startBaseInput = form.querySelector("#pinmol-start-base");
@@ -366,10 +809,9 @@
 
   document.addEventListener('click', e => {
     if (e.target.classList.contains("pagArrow")) {
-      program = e.target.parentNode.getAttribute("program");
-      queryHandlers.get(program).show(parseInt(e.target.getAttribute("value")), e.target.getAttribute("relative") === "true");
+      handlePaginationClick(e.target);
     } else if(e.target.classList.contains("program-selector-button")){
-      program = e.target.getAttribute("program");
+      let program = e.target.getAttribute("program");
       const selected = !e.target.classList.toggle("program-unselected");
       if(selected){
         queryHandlers.get(program).select();
@@ -379,34 +821,61 @@
     }
   });
 
+  function handlePaginationClick(element){
+    let pagination = element.parentNode;
+    let program = pagination.getAttribute("program");
+    let type = pagination.getAttribute("type");
+    let handler = queryHandlers.get(program);
+    let value = parseInt(element.getAttribute("value")), relative = element.getAttribute("relative") === "true";
+    if(type == "queries") {
+      handler.show(value, relative);
+    } else if(type == "files"){
+      //trust the correct element is shown
+      let query = handler.renderer.currentRenderedValue;
+      query.filePaginationController.show(value, relative);
+    } else {
+      console.error("Pagination type " + type + " not recognized.");
+    }
+
+  }
   function sendRequests(programs) {
     programs.forEach(sendRequest);
   }
   //******************************************************************************
-  async function sendRequest(program) {
+  function sendRequest(program) {
     program = programsCased[program.toLowerCase()];
     const data = new FormData(form);
     const query = queryHandlers[program.toLowerCase()].addResult();
-    const response = await fetch(`/send-request?program=${program}`, {
+    fetchFromServer(program, query, data);
+  }
+  function fetchFromServer(program, query, data){
+    fetch(`/send-request?program=${program}`, {
       method: "POST",
       body: data,
+      credentials: "same-origin"
+    }).then(response=>{
+      query.startResponse(response);
+    }).catch(e=>{
+      query.fetchError();
     });
-    query.startResponse(response);
+  }
+  window.onbeforeunload = function() {
+    return true;
+  };
+</script>
+<script>
+  const runBlastCard = document.querySelector('#run-blast-card');
+  const blastFileSection = document.querySelector("#blast-file-section");
+  const blastRunSection = document.querySelector("#blast-run-section");
+  if(runBlastCard && blastRunSection){ //may not exist if webapp
+    function setBlastSection(showRun){ 
+      toggleCollapsable(blastFileSection, showRun);
+      toggleCollapsable(blastRunSection, !showRun);
+    }
+    window.addEventListener('pageshow', e=>{
+      setBlastSection(document.querySelector('#blast-run').checked);
+    });
   }
 </script>
-{% endblock %}
 
-{% block head_content %}
-<link rel="stylesheet" href="{{ url_for('static', filename='pagination.css') }}">
-<style>
-  .program-section {
-    background-color: #f8f9fa;
-    padding: 1.5rem;
-    border-radius: 10px;
-    border: 1px solid #dee2e6;
-  }
-  .text-header{
-    margin-top: 2rem;
-  }
-</style>
 {% endblock %}

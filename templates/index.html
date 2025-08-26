@@ -1,29 +1,63 @@
 {% extends 'base.html' %}
 
+{% block head_content %}
+<script type="application/ld+json">
+  {
+  "@context": "https://schema.org",
+  "@type": "WebApplication",
+  "name": "RNAProbes",
+  "applicationCategory": "Biology",
+  "url": "https://www.rnaprobes.org",
+  "description": "A collection of powerful tools for RNA Probe design and analysis",
+  "about": [
+    {
+      "@type": "Thing",
+      "name": "TFOFinder",
+      "description": "Target designer for triplex-forming oligonucleotides (TFOs) in RNA."
+    },
+    {
+      "@type": "Thing",
+      "name": "smFISH",
+      "description": "Probe design for single-molecule fluorescence in situ hybridization (smFISH), considering secondary structures."
+    },
+    {
+      "@type": "Thing",
+      "name": "PinMol",
+      "description": "Molecular beacon designer for live-cell imaging of mRNA targets."
+    }
+  ]
+}
+</script>
+{% endblock %}
+
 {% block content %}
   <div class="hero-section">
-    <h1 class="display-4">RNA Tools</h1>
-    <p class="lead">A collection of powerful tools for RNA Probe analysis and design.</p>
+    <h1 class="display-4">RNA Probes</h1>
+    <p class="lead">A collection of powerful tools for RNA Probe design and analysis.</p>
   </div>
 
   <p class="text-center text-muted mb-4" id="program-select-label">Select one or more programs to begin.</p>
 
-  <form action="/form" method="post" id="program-form">
+  <form action="/design" method="post" id="program-form">
     <div class="row">
-      <div class="col-md-4 mb-4">
-        <div class="card program-card" data-program="smFISH">
-          <div class="card-icon"><i class="fas fa-search-plus"></i></div>
-          <h5 class="card-title">smFISH</h5>
-          <p class="card-text">Probe design for single-molecule fluorescence in situ hybridization (smFISH), considering secondary structures.</p>
-          <input type="checkbox" name="programs" value="smFISH" class="form-check-input">
-        </div>
-      </div>
       <div class="col-md-4 mb-4">
         <div class="card program-card" data-program="TFOFinder">
           <div class="card-icon"><i class="fas fa-bullseye"></i></div>
           <h5 class="card-title">TFOFinder</h5>
           <p class="card-text">Target designer for triplex-forming oligonucleotides (TFOs) in RNA.</p>
           <input type="checkbox" name="programs" value="TFOFinder" class="form-check-input">
+        </div>
+      </div>
+      <div class="col-md-4 mb-4">
+        <div class="card program-card" data-program="smFISH">
+          <div class="card-icon"><i class="fas fa-search-plus"></i></div>
+          <h5 class="card-title">smFISH</h5>
+          <p class="card-text">Probe design for single-molecule fluorescence in situ hybridization (smFISH), considering secondary structures.
+            {% if is_web_app %} 
+            <br><br>
+            Limitations: RNA length < {{exports.smFISH.maxWebappLength}} nucleotides</p>
+            {% endif %}
+          <input type="checkbox" name="programs" value="smFISH" class="form-check-input">
         </div>
       </div>
       <div class="col-md-4 mb-4">
