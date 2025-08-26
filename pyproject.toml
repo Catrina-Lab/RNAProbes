@@ -13,6 +13,10 @@ flask = "^2.3"
 Bio = "*"
 pandas = "*"
 gunicorn = "*"
+redis = {version="^3.4.1", optional=true}
+
+[tool.poetry.extras]
+caching = ["redis"]
 
 [tool.poetry.requires-plugins]
 poetry-plugin-export = ">=1.8"

@@ -111,6 +111,6 @@ Pull requests should include:
 
 ## License
 
-GNU GPL v2
+GNU GPL v2, unless otherwise noted at the top of the file
 
 ---

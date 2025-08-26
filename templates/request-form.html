@@ -37,27 +37,70 @@
               <input type="number" class="form-control" id="pinmol-probe-length" name="pinmol-probe-length" min="{{exports.PinMol.probeMin}}" max="{{exports.PinMol.probeMax}}" placeholder="e.g., 20" required>
               <div class="form-text">Choose a number between {{exports.PinMol.probeMin}} and {{exports.PinMol.probeMax}}.</div>
             </div>
-            <div class="row">
-              <div class="col-md-6 mb-3">
+            <div class="row mb-4">
+              <div class="col-md-6 mb-1">
                 <label for="pinmol-start-base" class="form-label">Start Base (Optional)</label>
                 <input type="number" class="form-control" id="pinmol-start-base" name="pinmol-start-base" min="1" placeholder="Default: 1">
                 <div class="form-text">Choose a number greater than 1.</div>
               </div>
-              <div class="col-md-6 mb-3">
+              <div class="col-md-6 mb-1">
                 <label for="pinmol-end-base" class="form-label">End Base (Optional)</label>
                 <input type="number" class="form-control" id="pinmol-end-base" name="pinmol-end-base" placeholder="Default: end">
                 <div class="form-text">Choose a number greater than <span id="pinmol-end-base-text"></span>.</div>
               </div>
               <div class="form-text">The maximum value for both start and end base is your CT file's maximum base</div>
             </div>
+            <h4>Blast (Optional)</h4>
+            <fieldset class="mb-3 collapse blast-section disableCollapsed show" id="blast-file-section">
+              <label for="blast-file" class="form-label"><i class="fas fa-file-alt me-2"></i>Blast file</label>
+              <input type="file" class="form-control mb-2" id="blast-file" name="blast-file" accept=".xml">
+              <div class="form-text">Input your blast xml file (using nucleotide blast). It should be produced from the fasta file output from a previous, identical run of PinMol. Using the refseq_rna database is recommended for mRNAs.</div>
+            </fieldset>
+            {% if not is_web_app %}
+            <div class="program-card program-card-inline" id="run-blast-card" data-bs-toggle="collapse" data-bs-target=".blast-section" aria-expanded="false" aria-controls="blast-file-section blast-run-section">
+              <div class="inline-card-body">
+                <div>
+                  <span class="form-check-label" for="blast-run">Run blast</span>
+                  <div class="form-text mt-1">Check this to run blast instead of inputting a pre-existing XML file.</div>
+                </div>
+                <input type="checkbox" id="blast-run" name="blast-run" value="run-blast" class="form-check-input">
+              </div>
+            </div>
+            <fieldset class="mb-3 collapse blast-section disableCollapsed" id="blast-run-section" disabled>
+              <h5 class="mt-3">Run Blast</h5>
+              <div class="mb-3">
+                <label for="email-input" class="form-label"><i class="fas fa-file-alt me-2"></i>Email</label>
+                <input type="email" class="form-control" id="email-input" name="email-input" placeholder="johndoe@example.com">
+              </div>
+              <div class="row mb-4">
+                <div class="col-md-6 mb-1">
+                  <label for="database-input" class="form-label">Database</label>
+                  <select class="form-control" id="database-input" name="database-input">
+                    {% for database in exports.PinMol.validBlastDatabases %}
+                      <option value="{{database}}">{{database}}</option>
+                    {% endfor %}
+                  </select>
+                  <div class="form-text">Use refseq_rna for mRNAs, the others for nucleotides</div>
+                </div>
+                <div class="col-md-6 mb-1">
+                  <label for="txid-input" class="form-label">Organism</label>
+                  <input type="number" class="form-control" id="txid-input" name="txid-input" min="1" max="3456255" placeholder="Default: ignored">
+                  <div class="form-text">Input the txid of the organism you want to run blast on. Find the txid <a href="https://blast.ncbi.nlm.nih.gov/Blast.cgi" target="_blank">here</a> in the "BLAST Genomes" input.</div>
+                </div>
+              </div>
+            </fieldset>
+            {% endif %}
           </fieldset>
 
           <fieldset id="smFISH-section" class="program-section mb-4 {{ '' if 'smFISH' in programs else 'd-none' }}" program="smFISH" {{"" if 'smFISH' in programs else 'disabled' }}>
             <h3 class="fs-4"><i class="fas fa-search-plus me-2"></i>smFISH Options</h3>
+            {% if is_web_app %} 
+              <p class="form-text">Input file limitations: RNA Length must be less than {{exports.smFISH.maxWebappLength}} nucleotides</p>
+            {% endif %}
             <div class="program-card program-card-inline">
               <div class="inline-card-body">
                 <div>
-                  <label class="form-check-label" for="smFISH-intermolecular">Consider Intermolecular base pairings</label>
+                  <span>Consider Intermolecular base pairings</span>
                   <div class="form-text mt-1">Check this to enable analysis of interactions between separate RNA molecules.</div>
                 </div>
                 <input type="checkbox" name="smFISH-intermolecular" value="intermolecular" class="form-check-input">

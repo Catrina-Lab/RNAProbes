@@ -3,7 +3,9 @@
     <div class="result-header">
       <h5 class="card-title text-danger"><i class="fas fa-check-circle me-2"></i>{{ program }}</h5>
       <span class="page-controls-container">
-        {% include 'pagination.html' %}
+        {% with pag_type="queries" %}
+          {% include 'request-results/pagination.html' %}
+        {% endwith %}
       </span>
     </div>
     <p class="card-text failed-message"></p>
