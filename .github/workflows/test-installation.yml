@@ -1,0 +1,47 @@
+name: Test installation still works
+
+on:
+  push:
+    branches: [ testing ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  docker-build-test-local:
+    uses: ./.github/workflows/test-run-server.yml
+    with:
+      dockerfile-path: TestDockerFiles/LocalServerDockerfile
+      image-name: myapp:testLocal
+      network-name: flask-test-net
+      process-name: run-local-server
+
+  docker-build-test-server:
+    uses: ./.github/workflows/test-run-server.yml
+    with:
+      dockerfile-path: TestDockerFiles/ServerDockerfile
+      image-name: myapp:testServer
+      network-name: flask-test-net
+      process-name: run-external-server
+      port: 8080
+
+  test-single:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Build Flask Docker image
+        run: |
+          export DOCKER_BUILDKIT=1
+          docker build -t myapp:testSingle -f TestDockerFiles/SingleProgramDockerfile . --progress=plain --no-cache
+
+      - name: Clean up any old containers
+        run: |
+          docker rm -f test-single || true
+
+      - name: Run Flask container in background
+        run: |
+          docker run --name test-single myapp:testSingle
+          docker stop test-single || true
+          docker rm test-single || true

@@ -1,7 +1,6 @@
 from __future__ import annotations
 import os
 import sys
-from redis.exceptions import ConnectionError
 
 IS_WEB_APP = os.environ.get("IS_WEB_APP")
 USE_REDIS = bool(IS_WEB_APP)
@@ -9,6 +8,7 @@ REDIS_ERROR = "" if IS_WEB_APP else "Not running as WebApp"
 if USE_REDIS:
     try:
         from redis import Redis
+        from redis.exceptions import ConnectionError
         r = Redis.from_url(os.environ.get("REDIS_URL", ""))
         r.ping()
     except ImportError:
