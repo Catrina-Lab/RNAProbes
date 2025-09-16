@@ -4,17 +4,21 @@ import sys
 
 IS_WEB_APP = os.environ.get("IS_WEB_APP")
 USE_REDIS = bool(IS_WEB_APP)
+REDIS_ERROR = "" if IS_WEB_APP else "Not running as WebApp"
 if USE_REDIS:
     try:
         from redis import Redis
+        from redis.exceptions import ConnectionError
         r = Redis.from_url(os.environ.get("REDIS_URL", ""))
         r.ping()
     except ImportError:
         USE_REDIS = False
-        print("Redis not installed", file=sys.stderr)
+        REDIS_ERROR = "Redis not installed"
+        print(REDIS_ERROR, file=sys.stderr)
     except ValueError:
         USE_REDIS = False
-        print("No database found, set environment variable REDIS_URL to connect to a redis DB. Not needed for personal use.", file=sys.stderr)
+        REDIS_ERROR = "No database set"
+        print("No database set, set environment variable REDIS_URL to connect to a redis DB. Not needed for personal use.", file=sys.stderr)
     except ConnectionError:
         print("Can't connect to redis database, ping failed", file=sys.stderr) #fine to keep trying, may have been a one-off issue
 
@@ -31,3 +35,16 @@ def add_run_to_db(user_id: str, program_name: str):
             r.sadd(f"program:{program_name}", user_id)  # users for each program
         except ConnectionError: #don't stop request if DB is down
             print("Can't connect to redis database for program result, connection failed.", file=sys.stderr)
+
+def get_stats():
+    if not USE_REDIS: return "Can't connect to database. " + REDIS_ERROR
+    try:
+        return f"""Total Users: {r.scard('all_users')}
+TFOFinder: Users - {r.scard('program:TFOFinder')}, Runs - {int(r.hget('program_runs', 'TFOFinder') or 0)}
+PinMol: Users - {r.scard('program:PinMol')}, Runs - {int(r.hget('program_runs', 'PinMol') or 0)}
+smFISH: Users - {r.scard('program:smFISH')}, Runs - {int(r.hget('program_runs', 'smFISH') or 0)}"""
+    except ConnectionError:
+        print("Can't connect to redis database for stats, connection failed.", file=sys.stderr)
+        return "Can't connect to database, connection failed"
+
+

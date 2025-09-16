@@ -1,0 +1,65 @@
+name: Test run server
+
+on:
+  workflow_call:
+    inputs:
+      dockerfile-path:
+        required: true
+        type: string
+      image-name:
+        required: true
+        type: string
+      process-name:
+        required: false
+        type: string
+        default: run-server
+      network-name:
+        required: false
+        type: string
+        default: test-net
+      port:
+        required: false
+        type: number
+        default: 5000
+        
+
+jobs:
+  test-run-server:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Build Flask Docker image
+        run: docker build -t ${{ inputs.image-name }} -f ${{ inputs.dockerfile-path }} .
+
+      - name: Clean up any old containers
+        run: |
+          docker rm -f ${{ inputs.process-name }} || true
+          docker network rm ${{ inputs.network-name }} || true
+
+      - name: Run Flask container in background
+        run: |
+          docker network create ${{ inputs.network-name }}
+          docker run -d --name ${{ inputs.process-name }}  --network ${{ inputs.network-name }} -p ${{ inputs.port }}:${{ inputs.port }} ${{ inputs.image-name }}
+
+      - name: Wait for Flask to start
+        run: |
+          success=0
+          for i in $(seq 1 20); do
+            docker run --rm --network ${{ inputs.network-name }} curlimages/curl:latest -sSf http://${{ inputs.process-name }}:${{ inputs.port }}/ && { success=1; break; }
+            echo "Waiting for Flask..."
+            sleep 1
+          done
+
+          if [ "$success" -ne 1 ]; then
+            echo "Flask did not start within 20 seconds"
+            exit 1
+          fi
+
+      - name: Stop Flask container
+        run:
+          docker stop ${{ inputs.process-name }} || true
+          docker rm ${{ inputs.process-name }} || true
+          docker network rm ${{ inputs.network-name }} || true
