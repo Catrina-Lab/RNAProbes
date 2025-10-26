@@ -7,8 +7,7 @@ from uuid import UUID
 
 from flask import Response, jsonify, make_response, request, Request
 
-from rnaprobes.RNAUtil import get_ct_nucleotide_length
-from rnaprobes.util import validate_arg
+from ..rnaprobes.RNAUtil import get_ct_nucleotide_length
 from .usage_tracker import add_run_to_db
 from .Program import Program, IS_DELAYED
 from ..rnaprobes.util import optional_argument, safe_remove_tree

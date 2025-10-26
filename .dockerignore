@@ -13,3 +13,4 @@ user-files/*
 **/.venv/
 **/.linuxvenv/
 **/venv/
+TestDockerFiles/

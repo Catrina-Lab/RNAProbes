@@ -6,21 +6,29 @@ import os
 import uuid
 from pathlib import Path
 
-from flask import Flask, render_template, request, redirect, url_for, Response, make_response, g, jsonify
+from flask import Flask, render_template, request, redirect, url_for, Response, make_response, g, jsonify, abort
 from sys import argv
 
+from werkzeug.datastructures import Authorization
+
+from src.server.usage_tracker import get_stats
 from src.rnaprobes.TFOFinder import tfofinder
 from src.rnaprobes.PinMol import pinmol
 from src.rnaprobes.smFISH import smFISH
 from src.server.program_controller import run_program, set_root, query_program
 from werkzeug.utils import secure_filename
 
-app = Flask(__name__)
-app.config['TEMPLATES_AUTO_RELOAD'] = True
-
 program_names = ["TFOFinder", "PinMol", "smFISH"]
 IS_WEB_APP = os.environ.get("IS_WEB_APP")
+
+AUTH = os.environ.get("AUTH")
 set_root(Path(__file__).parent)
+def create_app():
+    app = Flask(__name__)
+    app.config['TEMPLATES_AUTO_RELOAD'] = True
+    return app
+
+app = create_app()
 
 @app.errorhandler(500)
 def application_error(error):
@@ -83,5 +91,20 @@ def about():
 def contact():
     return render_template('contact.html')
 
+@app.route('/stats')
+def stats():
+    return render_template('stats.html')
+
+def matches_AUTH(pwd: Authorization, AUTH: str) -> bool:
+    return pwd is not None and str(pwd).replace("Basic ", "") == AUTH
+
+@app.route('/getstatistics')
+def get_statistics():
+    pwd = request.authorization
+    if not AUTH: return "Error: no password found in server to compare against", 500
+    if matches_AUTH(pwd, AUTH):
+        return get_stats()
+    abort(401)
+
 if __name__ == '__main__':
-    app.run(debug= (True if "-d" in argv or "--debug" in argv else False)) #use debug if any command line arguments are inputted
+    app.run(debug=(True if "-d" in argv or "--debug" in argv else False))  # use debug if any command line arguments are inputted

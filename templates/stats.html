@@ -1,0 +1,53 @@
+{% extends "base.html" %}
+
+{% block titleAddition %} - Stats{% endblock %}
+
+{% block content %}
+<div class="container mt-5">
+    <div class="card shadow-sm">
+        <div class="card-body p-5">
+            <h3>View Stats</h3>
+            <form id="authorization" class="d-flex gap-2 mb-3">
+                <input type="password" class="form-control" id="password" placeholder="Password:"/>
+                <button type="submit" class="btn btn-primary">Submit</button>
+            </form>
+            <div id="statsContainer"></div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script type="text/javascript">
+    const form = document.querySelector('#authorization');
+    const passwordElem = document.querySelector('#password');
+    const statsContainer = document.querySelector('#statsContainer');
+    form.addEventListener('submit', e=>{
+        e.preventDefault();
+        sendRequest(passwordElem.value);
+    });
+    function encodeBase64(value){
+        return btoa(value);
+    }
+    async function sendRequest(pwd){
+        statsContainer.innerHTML = "";
+        let response = await fetch('getstatistics', {
+            method: "GET",
+            headers: {
+                Authorization: "Basic " + encodeBase64(pwd)
+            }
+        }).catch(e=>renderStats("Can't connect to server", true));
+        if(response.status >= 400  && response.status < 600){
+            if(response.status == 401) renderStats("Incorrect credentials", true);
+            else renderStats("Something went wrong", true);
+        } else {
+            renderStats(await response.text());
+        }
+    }
+    function renderStats(str, errorString = false){
+        statsContainer.innerHTML = str.replaceAll("\n", "<br>");
+    }
+</script>
+
+
+{% endblock %}

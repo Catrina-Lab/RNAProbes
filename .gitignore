@@ -9,3 +9,5 @@ user-files/*
 **/.linuxvenv/
 **/venv/
 **/.poetry/
+src/rnaprobes/tests/output/*
+**/.coverage

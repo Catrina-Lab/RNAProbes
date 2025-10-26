@@ -1,0 +1,14 @@
+FROM python:3.9-slim
+
+
+WORKDIR /app
+
+COPY pyproject.toml poetry.lock ./
+RUN pip install poetry \
+    && poetry config virtualenvs.in-project true \
+    && poetry install
+
+COPY . .
+
+RUN find /app/src/rnaprobes/RNAStructure_Binaries/Linux64 -type f -exec chmod +x {} +
+CMD [".venv/bin/python3", "-m", "flask", "run", "--host=0.0.0.0", "--port=5000"]
