@@ -1,4 +1,4 @@
-Beacons marked with a "*" are too structured or show a high degree of self-complementarity, and therefore have no svg file.
+Molecular Beacons marked with a "*" are too structured or show a high degree of self-complementarity, and therefore have no svg file.
 1 MB sequence at base number 6201 is:  CGAGCGUGUGUGUGUGUGUGUGUGGGCUCG
 2 MB sequence at base number 9385 is:  CGCGAUUGUGUGGUGAUGUGUGGUGUCGCG
 *3 MB sequence at base number 9386 is:  CGCCAUUGUGUGGUGAUGUGUGGUGGCG

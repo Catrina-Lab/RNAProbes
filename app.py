@@ -18,7 +18,7 @@ from src.rnaprobes.smFISH import smFISH
 from src.server.program_controller import run_program, set_root, query_program
 from werkzeug.utils import secure_filename
 
-program_names = ["TFOFinder", "PinMol", "smFISH"]
+program_names = ["TFOFinder", "smFISH", "PinMol"]
 IS_WEB_APP = os.environ.get("IS_WEB_APP")
 
 AUTH = os.environ.get("AUTH")
@@ -35,17 +35,13 @@ def application_error(error):
     return str(error), 500
 
 @app.before_request
-def track_visitor():
-    visitor_id = request.cookies.get("visitor_id")
-    g.set_cookie = not visitor_id
-    if g.set_cookie:
-        visitor_id = str(uuid.uuid4())
-    g.visitor_id = visitor_id
+def track_visitor_if_allowed():
+    g.visitor_id = request.cookies.get("visitor_id", None)
 
-@app.after_request
-def set_visitor_cookie(response):
-    if g.set_cookie:
-        response.set_cookie("visitor_id", g.visitor_id, max_age=60*60*24*365*5, httponly = True)  # 5 years
+@app.route('/allow_tracking')
+def allow_tracking():
+    response = Response()
+    response.set_cookie("visitor_id", str(uuid.uuid4()), max_age=60 * 60 * 24 * 365 * 5, httponly=True)  # 5 years
     return response
 
 @app.route('/')

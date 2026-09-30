@@ -26,10 +26,9 @@ if USE_REDIS:
 def add_run_to_db(user_id: str, program_name: str):
     if USE_REDIS:
         try:
-            #r.hincrby(f"user:{user_id}:programs", program_name, 1) #get runs per user
-            r.hincrby(f"program:{program_name}:users", user_id, 1) #get users per program
+            #r.hincrby(f"program:{program_name}:users", user_id, 1) #get users per program
 
-            r.hincrby(f"program_runs", program_name, 1)  # get users per program
+            #r.hincrby(f"program_runs", program_name, 1)  # get users per program
 
             r.sadd("all_users", user_id)  # unique user IDs
             r.sadd(f"program:{program_name}", user_id)  # users for each program

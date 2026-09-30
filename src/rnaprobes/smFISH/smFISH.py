@@ -4,6 +4,7 @@ import datetime
 import os, sys
 from argparse import Namespace
 import shlex
+from typing import Callable
 
 import pandas as pd
 import itertools
@@ -169,12 +170,12 @@ def get_best_possible_probe_set(filein: str | Path, program_object: ProgramObjec
 
 def get_best_probes(df: DataFrame, program_object: ProgramObject, count=PROBE_RETURN_COUNT) -> DataFrame:
     probes = df.nlargest(count, ["Hybeff"]).sort_index()
-    probes.to_csv(program_object.save_buffer(f"[fname]_best_{count}_probes.csv"), index=False, float_format=f'%.{PRECISION}g')
+    probes.to_csv(program_object.save_buffer(f"[fname]_best_up_to_{count}_probes.csv"), index=False, float_format=f'%.{PRECISION}g')
     if should_print(program_object.arguments): print(f"{len(df)} probes found." + (f" Choosing the best {count}" if len(df) > count else ""))
     return probes
 
-def equilibrium_constant(input):
-    return math.e ** (-(input / (GAS_CONSTANT*TEMP_K)))
+def equilibrium_constant(input, temperature = TEMP_K):
+    return math.e ** (-(input / (GAS_CONSTANT*temperature)))
 
 def get_size_warning(length: int):
     if length > 4000:
@@ -186,30 +187,49 @@ def get_matching_probes(filein: str, program_object: ProgramObject):
     if should_print(program_object.arguments):
         length = get_ct_nucleotide_length(filein)
         print(get_size_warning(length))
-    df = RNAStructureWrapper.oligowalk(Path(filein),
-                                       arguments=f"--structure -d -l {probe_length} -c {CONCENTRATION} -m 1 -s 3 --no-header",
-                                       path_mapper=program_object.file_path,
-                                       remove_input=program_object.arguments.delete_ct)
-    # todo: ummm, 0.1 * 10???
-    dG1FA, dG2FA, dG3FA = (df['Duplex (kcal/mol)'] + 0.2597 * 10,
-                           df['Intra-oligo (kcal/mol)'] + 0.1000 * 10,
-                           df['Break-Target (kcal/mol)'] + (0.0117 * abs(df['Break-Target (kcal/mol)'])) * 10)
-    Koverall = (equilibrium_constant(dG1FA) /
-                ((1 + equilibrium_constant(dG2FA)) * (1 + equilibrium_constant(dG3FA))))
-    k_overall = CONCENTRATION * Koverall
-    df['Hybeff'] = k_overall / (1 + k_overall)
 
-    df['fGC'] = (df['Oligo(5\'->3\')'].apply(
-        count_c_g)) / probe_length  # Apply the function to each cell in the DataFrame; GC fraction in each sequence
-    df.rename(columns={'Pos.': 'Pos'}, inplace=True)
-
-    df_filtered = df[(df.fGC >= 0.45) & (df.fGC <= 0.60) & (
-                df.Hybeff >= 0.6)]  # & (df2.Pos >= 434) & (df2.Pos <= 1841)] #only CDS for oskRC
-    df_filtered.reset_index(drop=True, inplace=True)
+    df = get_oligowalk_output(filein, program_object)
+    df_with_cols = get_hybeff_columns(df, program_object)
+    df_filtered = filter_oligo_output(df_with_cols)
 
     df_cols_removed = df_filtered[list(COLS_TO_SAVE)]
     df_cols_removed.to_csv(program_object.save_buffer("[fname]_possible_matching_probes.csv"), sep=',', index=None) #not using float_format so it can be used as an input
     return df_cols_removed
+
+def get_oligowalk_output(filein: str, program_object: ProgramObject, used_probe_length=probe_length):
+    return RNAStructureWrapper.oligowalk(Path(filein),
+                                       arguments=f"--structure -d -l {used_probe_length} -c {CONCENTRATION} -m 1 -s 3 --no-header",
+                                       path_mapper=program_object.file_path,
+                                       remove_input=program_object.arguments.delete_ct)
+
+def get_hybeff_columns(df: DataFrame, program_object: ProgramObject, used_probe_length=probe_length,
+                       tempK=TEMP_K, concentration=10, get_effective_dG2FA: Callable[[pd.DataFrame, pd.Series], pd.Series] = None):
+    # todo: ummm, 0.1 * 10???
+    dG1FA, dG2FA, dG3FA = (df['Duplex (kcal/mol)'] + 0.2597 * concentration,
+                           df['Intra-oligo (kcal/mol)'] + 0.1000 * concentration,
+                           df['Break-Target (kcal/mol)'] + (0.0117 * abs(df['Break-Target (kcal/mol)'])) * concentration)
+
+    if get_effective_dG2FA is not None:
+        dG2FA = get_effective_dG2FA(df, dG2FA)
+
+    Koverall = (equilibrium_constant(dG1FA, tempK) /
+                ((1 + equilibrium_constant(dG2FA, tempK)) * (1 + equilibrium_constant(dG3FA, tempK))))
+    k_overall_concentration = CONCENTRATION * Koverall
+    df['Hybeff'] = k_overall_concentration / (1 + k_overall_concentration)
+
+    df['fGC'] = (df['Oligo(5\'->3\')'].apply(
+        count_c_g)) / used_probe_length  # Apply the function to each cell in the DataFrame; GC fraction in each sequence
+
+    # df['Koverall'] = Koverall
+
+    df.rename(columns={'Pos.': 'Pos'}, inplace=True)
+    return df
+
+def filter_oligo_output(df: DataFrame) -> DataFrame:
+    df_filtered = df[(df.fGC >= 0.45) & (df.fGC <= 0.60) & (
+            df.Hybeff >= 0.6)]  # & (df2.Pos >= 434) & (df2.Pos <= 1841)] #only CDS for oskRC
+    df_filtered.reset_index(drop=True, inplace=True)
+    return df_filtered
 
 def process_oligos(oligos: list, program_object: ProgramObject):
     pairs = get_pairs_file(oligos, program_object.file_path("[fname]_pairs.txt"))

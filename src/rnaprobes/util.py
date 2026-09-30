@@ -93,6 +93,13 @@ def input_value(msg : str, mapper: type[any] = identity, predicate = lambda n: T
             if retry_if_fail: print(fail_message)
             else: raise ValueError(fail_message) from e
 
+def input_float(msg : str = None, fail_message : str = None,
+                       initial_value = None, retry_if_fail=True):
+    fail_message = fail_message or f"Please input an floating point number."
+    msg = msg or f"Input an number: "
+    return input_value(msg, mapper=float, initial_value=initial_value,
+                       fail_message=fail_message, retry_if_fail=retry_if_fail)
+
 def input_int_in_range(min: int = None, max: int = None, msg : str = None, fail_message : str = None,
                        initial_value = None, extra_predicate=lambda x: False, retry_if_fail=True) -> int:
     fail_message = fail_message or f"Please input an integer between {min} (inclusive) and {max} (exclusive)."
@@ -241,7 +248,8 @@ def path_arg(string, suffix=".ct", must_exist: bool = True):
     if (not must_exist or path.exists()) and path.suffix in suffix:  # in returns true if string ==
         return path
     else:
-        raise argparse.ArgumentTypeError(f'Invalid file given. File must be an existing {suffix} file')
+        name = 'directory' if suffix == '' else 'file'
+        raise argparse.ArgumentTypeError(f'Invalid {name} given, it must be an existing {suffix} {name}')
 
 def directory_arg(string, create_if_missing: bool = True):
     path = path_arg(string, suffix="", must_exist=not create_if_missing)

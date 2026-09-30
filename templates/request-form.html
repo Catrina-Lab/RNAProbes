@@ -30,6 +30,22 @@
             </div>
           </fieldset>
 
+          <fieldset id="smFISH-section" class="program-section mb-4 {{ '' if 'smFISH' in programs else 'd-none' }}" program="smFISH" {{"" if 'smFISH' in programs else 'disabled' }}>
+            <h3 class="fs-4"><i class="fas fa-search-plus me-2"></i>smFISH Options</h3>
+            {% if is_web_app %}
+              <p class="form-text">Input file limitations: RNA Length must be less than {{exports.smFISH.maxWebappLength}} nucleotides</p>
+            {% endif %}
+            <div class="program-card program-card-inline">
+              <div class="inline-card-body">
+                <div>
+                  <span>Consider Intermolecular base pairings</span>
+                  <div class="form-text mt-1">Check this to enable analysis of interactions between separate RNA molecules.</div>
+                </div>
+                <input type="checkbox" name="smFISH-intermolecular" value="intermolecular" class="form-check-input">
+              </div>
+            </div>
+          </fieldset>
+
           <fieldset id="PinMol-section" class="program-section mb-4 {{ '' if 'PinMol' in programs else 'd-none' }}" program="PinMol" {{"" if 'PinMol' in programs else 'disabled' }}>
             <h3 class="fs-4"><i class="fas fa-map-pin me-2"></i>PinMol Options</h3>
             <div class="mb-3">
@@ -90,22 +106,6 @@
               </div>
             </fieldset>
             {% endif %}
-          </fieldset>
-
-          <fieldset id="smFISH-section" class="program-section mb-4 {{ '' if 'smFISH' in programs else 'd-none' }}" program="smFISH" {{"" if 'smFISH' in programs else 'disabled' }}>
-            <h3 class="fs-4"><i class="fas fa-search-plus me-2"></i>smFISH Options</h3>
-            {% if is_web_app %} 
-              <p class="form-text">Input file limitations: RNA Length must be less than {{exports.smFISH.maxWebappLength}} nucleotides</p>
-            {% endif %}
-            <div class="program-card program-card-inline">
-              <div class="inline-card-body">
-                <div>
-                  <span>Consider Intermolecular base pairings</span>
-                  <div class="form-text mt-1">Check this to enable analysis of interactions between separate RNA molecules.</div>
-                </div>
-                <input type="checkbox" name="smFISH-intermolecular" value="intermolecular" class="form-check-input">
-              </div>
-            </div>
           </fieldset>
           
           <div class="d-grid">

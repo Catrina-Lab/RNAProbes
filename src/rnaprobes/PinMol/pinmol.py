@@ -386,7 +386,7 @@ def initialize_molecular_beacon_file(program_object):
         program_object.reset_buffer(f"[fname]_Final_molecular_beacons.txt")
 
     with program_object.open_buffer(f"[fname]_Final_molecular_beacons.txt", "a") as file:
-        file.write('Beacons marked with a "*" are too structured or show a high degree of self-complementarity, and therefore have no svg file.\n')
+        file.write('Molecular Beacons marked with a "*" are too structured or show a high degree of self-complementarity, and therefore have no svg file.\n')
 
 def design_beacon(mb_picks: DataFrame, index: int, probe_length: int, program_object: ProgramObject): #design the stem of the final probes
     baseNum = mb_picks["Base Number"][index]

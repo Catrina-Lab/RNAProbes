@@ -9,15 +9,18 @@ from .RNAProbesUtil import run_command_line
 from .TFOFinder import tfofinder
 from .smFISH import smFISH
 from .util import input_value
+from .HybeffCalculator import calculateHybeff
+
 
 dummy_program = "skip_run"
 programs = {
     "tfofinder": tfofinder.run,
     "pinmol": pinmol.run,
-    "smfish": smFISH.run
+    "smfish": smFISH.run,
+    "hybeff": calculateHybeff.run
 }
 def run(args: list):
-    program = input_value("Input a program (either tfofinder, pinmol, or smfish): ", str.lower,
+    program = input_value(f"Input a program (one of: {', '.join(programs.keys())}): ", str.lower,
                           lambda program: program in programs.keys() or program == dummy_program, retry_if_fail=True,
                           initial_value=args[0].lower() if len(args) >= 1 else None)
     if program == dummy_program:

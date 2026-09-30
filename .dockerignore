@@ -14,3 +14,4 @@ user-files/*
 **/.linuxvenv/
 **/venv/
 TestDockerFiles/
+AutoUpdate/

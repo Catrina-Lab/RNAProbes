@@ -112,13 +112,13 @@ program_dict = { #get args, validate args, return value
 def get_program_object(prog_name: str) -> Program:
     return program_dict[prog_name.lower()]
 
-def run_program(prog_name: str, user_id: str, error_message_validation: str ="Something went wrong", error_message_program: str="Something went wrong"):
+def run_program(prog_name: str, user_id: str | None, error_message_validation: str ="Something went wrong", error_message_program: str="Something went wrong"):
     # import time
     # prev = time.time_ns()
     program = get_program_object(prog_name)
     result =  program.run(request, error_message_validation, error_message_program)
     response = get_program_response(result, program.name)
-    if 200 <= response.status_code < 300: log_program_success(program.name, user_id) #OK for DelayedProgram since it still verifies the arguments
+    if 200 <= response.status_code < 300 and user_id is not None: log_program_success(program.name, user_id) #OK for DelayedProgram since it still verifies the arguments
     # print(((time.time_ns() - prev) // 1_000) / 1_000)
     return response
 

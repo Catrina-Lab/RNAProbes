@@ -1,6 +1,6 @@
 {% extends 'base.html' %}
 
-{% block titleAddition %} - requests{% endblock %}
+{% block titleAddition %} - Requests{% endblock %}
 
 {% block head_content %}
 <script type="application/ld+json">
@@ -63,6 +63,24 @@
     </div>
   </div>
 </div>
+<!-- Modal -->
+<div class="modal fade" id="cookieConsentModal" tabindex="-1" aria-labelledby="cookieConsentLabel1" aria-hidden="true" data-bs-backdrop="static" data-bs-keyboard="false">
+    <div class="modal-dialog modal-sm d-flex justify-content-center">
+        <div class="modal-content text-center">
+            <div class="modal-header d-flex justify-content-center">
+                <h5 class="modal-title text-primary" id="cookieConsentLabel1">Cookies & Privacy</h5>
+            </div>
+            <div class="modal-body p-4">
+                This website uses cookies to ensure you get the best experience on our website.
+            </div>
+            <div class="modal-footer d-flex justify-content-center cookieButtonContainer">
+                <button type="button" data-bs-button-init data-bs-ripple-init class="btn btn-outline-primary rejectCookies" data-bs-dismiss="modal">Reject</button>
+                <button type="button" data-bs-button-init data-bs-ripple-init class="btn btn-primary allowCookies" data-bs-dismiss="modal">Allow</button>
+            </div>
+        </div>
+    </div>
+</div>
+<!-- Modal -->
 {% endblock %}
 
 {% block scripts %}
@@ -876,6 +894,23 @@
       setBlastSection(document.querySelector('#blast-run').checked);
     });
   }
+</script>
+
+<script>
+  //tracking script
+  let trackingAllowed = localStorage.getItem("allowTracking");
+  function showCookiePopup(){
+    let cookieModal = new bootstrap.Modal(document.getElementById('cookieConsentModal'), {});
+    cookieModal.show();
+  }
+  if(trackingAllowed == undefined){
+    window.addEventListener('pageshow', e=>{
+      showCookiePopup();
+    });
+  }
+  document.addEventListener('click', ()=>{
+    
+  });
 </script>
 
 {% endblock %}
